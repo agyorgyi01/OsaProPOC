@@ -100,6 +100,24 @@ public class FoundationTests
     }
 
     [Fact]
+    public void Masks_secret_value_in_exception_text()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Secrets:ExcelFile"] = "valami.xls"
+            })
+            .Build();
+        var logger = CreateLogger(configuration);
+
+        logger.LogError(new InvalidOperationException("nem nyitható meg a valami.xls fájl"), "hiba");
+
+        var entry = logger.Entries.Single();
+        Assert.Contains("##ExcelFile##", entry.ExceptionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("valami.xls", entry.ExceptionText, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Duplicate_secret_value_uses_the_first_key_name()
     {
         var configuration = new ConfigurationBuilder()
@@ -201,7 +219,7 @@ public class FoundationTests
             }
 
             var pairs = state as IEnumerable<KeyValuePair<string, object?>> ?? [];
-            _entries.Add(new LogEntry(formatter(state, exception), pairs.ToArray()));
+            _entries.Add(new LogEntry(formatter(state, exception), pairs.ToArray(), exception?.ToString()));
         }
     }
 
@@ -214,5 +232,8 @@ public class FoundationTests
         }
     }
 
-    private sealed record LogEntry(string Message, IReadOnlyList<KeyValuePair<string, object?>> State);
+    private sealed record LogEntry(
+        string Message,
+        IReadOnlyList<KeyValuePair<string, object?>> State,
+        string? ExceptionText);
 }

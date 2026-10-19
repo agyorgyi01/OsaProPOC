@@ -1,8 +1,10 @@
 using System.Reflection;
+using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.UserSecrets;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using OsaPro.Common;
 using OsaPro.Worker;
 
@@ -11,17 +13,16 @@ namespace OsaPro.Worker.Tests;
 public class WorkerTests
 {
     [Fact]
-    public async Task Host_starts_with_empty_secrets_and_has_no_trigger()
+    public void Host_builds_as_functions_worker_with_empty_secrets_and_has_no_trigger()
     {
         var contentRoot = Directory.CreateTempSubdirectory("osapro-worker-");
-        await File.WriteAllTextAsync(
+        File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.json"),
             """{ "Secrets": {} }""");
 
         using var host = WorkerComposition.Build(contentRoot.FullName, development: false, userSecretsId: null);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await host.StartAsync(timeout.Token);
-        await host.StopAsync(timeout.Token);
+        Assert.NotNull(host.Services.GetService<IOptions<WorkerOptions>>());
+        Assert.Empty(SecretConfiguration.SecretKeys(host.Services.GetRequiredService<IConfiguration>()));
 
         var attributes = typeof(FunctionHandlers).Assembly
             .GetTypes()
@@ -95,13 +96,16 @@ public class WorkerTests
                 }
                 """);
 
-            using var host = WorkerComposition.Build(
-                contentRoot.FullName,
-                development: true,
-                userSecretsId: "osapro-worker-test-secrets");
-            var configuration = host.Services.GetRequiredService<IConfiguration>();
+            foreach (var development in new[] { true, false })
+            {
+                using var host = WorkerComposition.Build(
+                    contentRoot.FullName,
+                    development,
+                    userSecretsId: "osapro-worker-test-secrets");
+                var configuration = host.Services.GetRequiredService<IConfiguration>();
 
-            Assert.Equal("user-secret-value", configuration["Secrets:ExcelFile"]);
+                Assert.Equal("user-secret-value", configuration["Secrets:ExcelFile"]);
+            }
             Assert.DoesNotContain("user-secret-value", File.ReadAllText(Path.Combine(contentRoot.FullName, "appsettings.json")), StringComparison.Ordinal);
             Assert.DoesNotContain(
                 "user-secret-value",

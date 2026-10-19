@@ -14,7 +14,7 @@ if (plan.ExitCode != WorkerEntry.Success)
 var host = WorkerComposition.Build(
     contentRoot: AppContext.BaseDirectory,
     development: development,
-    userSecretsId: development ? WorkerComposition.UserSecretsId : null);
+    userSecretsId: WorkerComposition.UserSecretsId);
 
 if (plan.FunctionId is not null)
 {

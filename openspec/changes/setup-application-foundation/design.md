@@ -37,13 +37,13 @@ A projektnév `OsaPro.<szerep>`. A tesztprojekt neve `OsaPro.<szerep>.Tests`. To
 | `tests/OsaPro.Common.Tests/OsaPro.Common.Tests.csproj` | A könyvtár tesztjei: üres `Secrets` szakasz, kulcsnév, maszkolás, a három azonosító. | Készül. |
 | `tests/OsaPro.Worker.Tests/OsaPro.Worker.Tests.csproj` | A host tesztjei: meghívás, futás- és hibanapló, trigger hiánya. | Készül. |
 
-Mind `net10.0`, egy `OsaPro.sln` solutionben. A tesztprojektek xUnitot használnak. Az `OsaPro.Worker` saját `appsettings.json` és `local.settings.json` fájlja a hostprojektben marad. Az `OsaPro.Common` a betöltés szabályát adja, nem egyetlen alkalmazás beállításait.
+Mind `net10.0`, a repó gyökerében lévő `OsaPro.sln` solutionben. A tesztprojektek xUnitot használnak. Az `OsaPro.Worker` saját `appsettings.json` és `local.settings.json` fájlja a hostprojektben marad. Az `OsaPro.Common` a betöltés szabályát adja, nem egyetlen alkalmazás beállításait.
 
 Alternatíva: a közös kód az `OsaPro.Worker` hostban, másolat a 6. change-ben. Elvetve, mert a naplózás, a titokkezelés és a paraméterbetöltés mindkét Function App szabálya.
 
 ### 2. A belépési pontnak nincs Azure-triggerje
 
-A számlafeldolgozás és az értesítés-összeállítás egy-egy handler az `OsaPro.Worker` hostban. Nincs `TimerTrigger` és nincs `HttpTrigger`. Az Azure által indított host ezért üresen vár, és egyik belépési pont sem hívható éles végponton vagy időzítőn. Az időzítés későbbi change, a projektnév ettől már az időzített folyamatok helyét jelöli.
+A számlafeldolgozás és az értesítés-összeállítás egy-egy handler az `OsaPro.Worker` hostban. A folyamat belépése `FunctionsApplication.CreateBuilder`. Nincs `TimerTrigger` és nincs `HttpTrigger`. Az Azure Functions host indítja a folyamatot, és a gRPC csatornát ő adja. A hostteszt a Functions-worker szolgáltatást és az üres `Secrets` szakaszt építi fel, a csatornát nem nyitja meg. Az Azure által indított host trigger nélkül vár, és egyik belépési pont sem hívható éles végponton vagy időzítőn. Az időzítés későbbi change, a projektnév ettől már az időzített folyamatok helyét jelöli.
 
 A teszt a handlert a host naplózásával és konfigurációjával közvetlenül hívja. Helyi fejlesztői indításkor a `dotnet run --project src/OsaPro.Worker -- --invoke <function-id>` hívja ugyanazt, és csak `Development` környezetben. Az argumentum hiánya vagy más környezet csak a hostot indítja, handlert nem futtat. Ismeretlen function-id nem indít handlert, és a folyamat nem nulla kilépési kóddal ér véget.
 
@@ -65,11 +65,11 @@ Alternatíva: megjelenítendő magyar név a naplóban. Elvetve, mert a szűrés
 
 ### 4. A paraméterbetöltés és a `Secrets` szakasz az OsaPro.Common könyvtárban van
 
-A könyvtár állítja össze a konfigurációt: a host verziókezelt `appsettings.json` fájlja, a környezeti változók, helyben pedig a User Secrets. Azure-ban a Function App Setting vagy a környezeti változó neve `Secrets__KulcsNeve`; a .NET ezt a `Secrets:KulcsNeve` kulcsra képezi.
+A könyvtár állítja össze a konfigurációt: a host verziókezelt `appsettings.json` fájlja, a környezeti változók, helyben pedig a User Secrets. A Worker ezt az `AddSources` hívással köti be, a környezet nevétől függetlenül. Azure-ban a Function App Setting vagy a környezeti változó neve `Secrets__KulcsNeve`; a .NET ezt a `Secrets:KulcsNeve` kulcsra képezi. Erre a leképezésre a könyvtár tesztje fut; külön Azure-host teszt nem készül.
 
 A host `appsettings.json` fájlja tartalmazza a `Secrets` szakaszt, kulcsok nélkül: `{ "Secrets": {} }`. Új kulcsnév ide kerülhet, érték nélkül. A `local.settings.json` csak a worker nem titkos hostbeállítását tartalmazza (`FUNCTIONS_WORKER_RUNTIME=dotnet-isolated`). Titkos érték nem kerül bele.
 
-Üres szakasznál a host elindul, és a maszkolótábla üres. A könyvtár tesztje a betöltést User Secrets és környezeti változó nélkül, memóriában adott konfigurációval ellenőrzi. A host tesztje azt ellenőrzi, hogy a helyi indítás a User Secrets forrást is bekötötte.
+Üres szakasznál a host elindul, és a maszkolótábla üres. A könyvtár tesztje a betöltést User Secrets és környezeti változó nélkül, memóriában adott konfigurációval ellenőrzi. A host tesztje azt ellenőrzi, hogy a helyi indítás Developmenten kívül is a User Secrets forrásból olvas.
 
 Alternatíva: minden konfigurációs érték titok. Elvetve, mert a spec a `Secrets` szakaszra korlátozza a jelölést. Alternatíva: a titok értéke a verziókezelt fájlban placeholder. Elvetve, mert a futó konfiguráció a feloldott értéket adja, és a napló azt tartalmazza.
 
@@ -77,7 +77,7 @@ Alternatíva: minden konfigurációs érték titok. Elvetve, mert a spec a `Secr
 
 A könyvtár a handler futása előtt felépíti a cseretáblát: minden nem üres `Secrets` értékhez a szakaszhoz képest vett kulcsnév tartozik. Az `ExcelFile` értéke `valami.xls` esetén a tábla `valami.xls` → `##ExcelFile##`.
 
-A host a könyvtár maszkolóját a worker `ILogger` útjára teszi. A maszkoló a kész üzenetben és a strukturált szöveges mezőkben minden találatot lecserél, majd továbbadja a naplót. A csere pontos, kis- és nagybetűre érzékeny. Üres érték nincs a táblában. Két kulcs azonos értékénél a nyers érték nem maradhat; a token a konfiguráció sorrendjében első kulcs neve.
+A host a könyvtár maszkolóját a worker `ILogger` útjára teszi. A maszkoló a kész üzenetben, a strukturált szöveges mezőkben és a kivétel `ToString()` szövegében minden találatot lecserél, majd továbbadja a naplót. A csere pontos, kis- és nagybetűre érzékeny. Üres érték nincs a táblában. Két kulcs azonos értékénél a nyers érték nem maradhat; a token a konfiguráció sorrendjében első kulcs neve.
 
 Alternatíva: csak a hívás helyén kézzel írt `##KulcsNeve##`. Elvetve, mert egy mondatba ágyazott feloldott értéket nem cserélne le. Alternatíva: a .NET beépített redactionje. Elvetve, mert nem köti a konfigurációs kulcs nevét a feloldott értékhez. Alternatíva: a maszkoló csak az `OsaPro.Worker` hostban. Elvetve, mert az `OsaPro.Slack` hostnak ugyanazt a cserét kell használnia.
 

@@ -32,13 +32,24 @@ public sealed class MaskingLogger : ILogger
         Func<TState, Exception?, string> formatter)
     {
         var message = _masker.Mask(formatter(state, exception));
+        var maskedException = MaskException(exception);
         if (TryMaskPairs(state, out var maskedState))
         {
-            _inner.Log(logLevel, eventId, maskedState, exception, (_, _) => message);
+            _inner.Log(logLevel, eventId, maskedState, maskedException, (_, _) => message);
             return;
         }
 
-        _inner.Log(logLevel, eventId, state, exception, (_, _) => message);
+        _inner.Log(logLevel, eventId, state, maskedException, (_, _) => message);
+    }
+
+    private Exception? MaskException(Exception? exception)
+    {
+        if (exception is null)
+        {
+            return null;
+        }
+
+        return new MaskedLogException(_masker.Mask(exception.ToString()));
     }
 
     private bool TryMaskPairs<TState>(
@@ -57,5 +68,19 @@ public sealed class MaskingLogger : ILogger
                 pair.Value is string text ? _masker.Mask(text) : pair.Value))
             .ToArray();
         return true;
+    }
+
+    private sealed class MaskedLogException : Exception
+    {
+        private readonly string _text;
+
+        public MaskedLogException(string text)
+        {
+            _text = text;
+        }
+
+        public override string Message => _text;
+
+        public override string ToString() => _text;
     }
 }

@@ -1,3 +1,4 @@
+using Microsoft.Azure.Functions.Worker.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -12,17 +13,17 @@ public static class WorkerComposition
 
     public static IHost Build(string contentRoot, bool development, string? userSecretsId)
     {
-        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
-        {
-            ContentRootPath = contentRoot,
-            EnvironmentName = development ? Environments.Development : Environments.Production,
-            ApplicationName = "OsaPro.Worker"
-        });
-
-        if (development && !string.IsNullOrWhiteSpace(userSecretsId))
-        {
-            builder.Configuration.AddUserSecrets(userSecretsId);
-        }
+        var builder = FunctionsApplication.CreateBuilder([]);
+        builder.Environment.ContentRootPath = contentRoot;
+        builder.Environment.EnvironmentName = development
+            ? Environments.Development
+            : Environments.Production;
+        builder.Configuration.Sources.Clear();
+        SecretConfiguration.AddSources(
+            builder.Configuration,
+            contentRoot,
+            includeUserSecrets: true,
+            userSecretsId);
 
         var masker = SecretMasker.FromConfiguration(builder.Configuration);
         var consoleFactory = LoggerFactory.Create(logging => logging.AddConsole());
