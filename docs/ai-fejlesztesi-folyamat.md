@@ -274,4 +274,4 @@ Kiegészítő checklist-elem: ha a change érintette a projekt-szintű architekt
 
 ## OsaPro projektkiegészítés
 
-Ebben a projektben a távoli CI- és PR-ellenőrzéseket egyelőre helyben végezzük, push nélkül. Az ellenőrzött változás helyben a fő ágba kerül. Az egyszemélyes jóváhagyásnál a grill-me és az emberi jóváhagyások megmaradnak; kötelező pihenőidőt és külső LLM-másodvéleményt nem alkalmazunk. A Git-munkarend az `openspec/project-conventions.md` fájlban van.
+Ebben a projektben a távoli CI- és PR-ellenőrzéseket egyelőre helyben végezzük, push nélkül. Az ellenőrzött változás helyben a fő ágba kerül. Az egyszemélyes jóváhagyásnál a grill-me és az emberi jóváhagyások megmaradnak; kötelező pihenőidőt és külső LLM-másodvéleményt nem alkalmazunk. A Git-munkarend az `openspec/project-conventions.md` fájlban van. Jóváhagyott átmeneti eltérés: egyelőre nincs commit előtti hook. Az `openspec validate --all --strict` parancsot commit előtt kézzel, kötelezően futtatjuk. A többi ellenőrzés és emberi jóváhagyási kapu megmarad.

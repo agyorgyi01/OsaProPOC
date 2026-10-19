@@ -1,0 +1,35 @@
+schema: spec-driven
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+context: |
+  A projektdokumentáció és az OpenSpec-dokumentumok magyarul készüljenek. Az OpenSpec szerkezeti jelöléseit és kulcsszavait tartsd meg.
+  A workflow elején olvasd el: openspec/project.md, openspec/project-conventions.md, openspec/roadmap.md, docs/ai-fejlesztesi-folyamat.md.
+  A feladathoz olvasd el az openspec/business-rules.md és az openspec/architecture.md releváns részeit, valamint az érintett kanonikus specifikációkat és a change dokumentumait.
+  A docs/OsaPro_Kickoff_v3.md a későbbi change-eknek nem bemenet.
+  A projektszintű követelmények nem automatikusan az aktuális change megvalósítandó feladatai.
+  A módszertan emberi jóváhagyási kapuit tartsd be.
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
