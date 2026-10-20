@@ -18,6 +18,27 @@ A jelölések jelentése: `project.md`. A hatókör és a kizárások ott vannak
 
 **DECISION** – Az új éves Excel-fájl létrehozásakor a `Paraméterek` munkalap értékeit az előző éves fájlból vesszük át, az `InsDate` értékével együtt. Az évváltás miatt nem maradhat ki számla.
 
+**DECISION** – A havi munkalap oszlopai ebben a sorrendben:
+
+1. `Partner neve`: a számlát kiállító eladó vagy szolgáltató neve.
+2. `Adószám`: a partner adószáma. A számlasorszámmal együtt azonosítja a bizonylatot.
+3. `Bankszámlaszám`: a partner bankszámlaszáma, amelyre az átutalás teljesíthető.
+4. `Számlasorszám`: a bizonylat kibocsátó által megadott azonosítója.
+5. `Eredeti számla`: módosító vagy sztornóbizonylat esetén az eredeti számla hivatkozása.
+6. `Kapcsolt bizonylatok`: az eredeti számlához tartozó módosító és sztornóbizonylatok hivatkozásai, ismétlés nélkül.
+7. `Számla kelte`: a bizonylat kiállításának dátuma. Ez határozza meg az éves fájlt és a havi munkalapot.
+8. `Fiz. határidő`: a fizetés esedékessége. Hiányában a számla keltét használjuk.
+9. `Fiz. összeg`: a bizonylat fizetendő összege.
+10. `Áfa tartalom`: áfakulcs vagy adózási jelölés, például `27%`, `0%`, `FAD`.
+11. `Áfa összege`: a bizonylaton szereplő áfa pénzösszege.
+12. `Fizetési mód`: például `ÁTUTALÁS`, `KÉSZPÉNZ`, `BANKKÁRTYA`, `UTÁNVÉT`. Az `ELŐLEGEZVE` előzetes fizetésre utaló jelölés.
+13. `Számla megvan?`: felhasználói jelölés. Üres: a rendelkezésre állás még nincs igazolva. `IGEN`: a bizonylat rendelkezésre áll.
+14. `Fizetve?`: felhasználói jelölés. Pontosan `FIZETVE` esetén kiegyenlített; üresen kiegyenlítetlen. Más érték hibás.
+15. `Autó rendelés`: felhasználó által kezelt belső hivatkozás, például rendszám, személynév vagy rendelési megjelölés.
+16. `Megjegyzés`: felhasználó által kezelt szabad szöveges kiegészítés.
+
+A példák nem zárt értékkészletek. Kivétel a `Számla megvan?` és a `Fizetve?` mező, amelyek szabálya fent és a későbbi szakaszokban rögzített. Az `Autó rendelés` és a `Megjegyzés` mezőből az OsaPro nem vezet le automatikus üzleti működést.
+
 ## Lekérdezés és folytatás
 
 **DECISION** – Az OsaPro a NAV által befogadott számlákat a befogadás időpontja (`insDate`) alapján kérdezi le.
@@ -28,7 +49,7 @@ A jelölések jelentése: `project.md`. A hatókör és a kizárások ott vannak
 
 **DECISION** – A program kizárólag az aktuális és az előző naptári évben kiállított számlákat kezeli. A fizetési figyelésre is ez vonatkozik.
 
-**DECISION** – A lekérdezés a tárolt `InsDate` előtti nap kezdetétől indul, de nem mehet az indulási kezdődátum elé. Az aktuális lekérdezési időpontig tart, legfeljebb 35 napos szeletekben.
+**DECISION** – A `queryInvoiceDigest` lekérdezés az eredeti, tárolt `InsDate` UTC naptári napjának `00:00:00Z` időpontjától a kapott `InsDate` UTC naptári napját követő nap `00:00:00Z` időpontjáig tart. A kapott `InsDate` a lekérdezés aktuális UTC időpontja. A kezdődátum `00:00:00Z` időpontja előtt a lekérdezés nem indul. A 35 napnál hosszabb időszak legfeljebb 35 napos szeletekben kérdezendő.
 
 **DECISION** – Egy szelet sikeres feldolgozása után a program az `InsDate` értékét a szelet végére állítja, akkor is, ha nem érkezett számla. Hibás vagy részleges feldolgozás esetén nem léphet túl a feldolgozatlan időszakon.
 
@@ -143,4 +164,4 @@ Ezek nem döntések.
 
 **OPEN QUESTION** – A Slack elérési hibájáról milyen módon történjen értesítés?
 
-**OPEN QUESTION** – A pontos Excel-oszlop listát és a sablont a részletes tervezésben rögzítjük.
+**OPEN QUESTION** – Az Excel-sablon oszloplistán túli részei később pontosítandók. Az oszlopnevek és a sorrendjük döntöttek.
