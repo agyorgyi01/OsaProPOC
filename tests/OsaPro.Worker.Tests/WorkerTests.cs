@@ -32,6 +32,14 @@ public class WorkerTests
         Assert.DoesNotContain(
             attributes,
             attribute => attribute.GetType().Name is "TimerTriggerAttribute" or "HttpTriggerAttribute");
+        var handlerSource = File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.Worker", "FunctionHandlers.cs")));
+        Assert.DoesNotContain("InboundInvoiceQuery", handlerSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("TimerTrigger", handlerSource, StringComparison.Ordinal);
+        Assert.DoesNotContain("HttpTrigger", handlerSource, StringComparison.Ordinal);
+        foreach (var file in Directory.GetFiles(FindRepoFile("src"), "*.cs", SearchOption.AllDirectories))
+        {
+            Assert.DoesNotContain("tokenExchange", File.ReadAllText(file), StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
@@ -154,11 +162,16 @@ public class WorkerTests
 
     private static string FindVersionedAppSettings()
     {
+        return FindRepoFile(Path.Combine("src", "OsaPro.Worker", "appsettings.json"));
+    }
+
+    private static string FindRepoFile(string relative)
+    {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
         while (directory is not null)
         {
-            var candidate = Path.Combine(directory.FullName, "src", "OsaPro.Worker", "appsettings.json");
-            if (File.Exists(candidate))
+            var candidate = Path.Combine(directory.FullName, relative);
+            if (File.Exists(candidate) || Directory.Exists(candidate))
             {
                 return candidate;
             }
@@ -166,7 +179,7 @@ public class WorkerTests
             directory = directory.Parent;
         }
 
-        throw new FileNotFoundException("A verziókezelt appsettings.json nem található.");
+        throw new FileNotFoundException(relative);
     }
 
     private sealed class CapturingLogger : ILogger
