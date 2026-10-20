@@ -1,9 +1,9 @@
 using System.IO.Compression;
 using System.Text;
 using System.Xml.Serialization;
-using InvoiceDocument = OsaPro.Common.Nav.InvoiceData.InvoiceData;
+using InvoiceDocument = OsaPro.NAV.InvoiceData.InvoiceData;
 
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 internal static class InvoiceDataDecoder
 {

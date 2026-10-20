@@ -111,11 +111,11 @@ A rendszer MUST a HTTP 200 melletti `funcCode` `ERROR` választ és a HTTP 4xx v
 - **THEN** a rendszer nem küldi újra a kérést, és a lekérdezés sikertelen
 
 ### Requirement: Verziókezelt Nav beállítás
-A rendszer MUST a lekérdezést a verziókezelt `Nav` szakasz `BaseUrl` és `Software` értékeivel küldeni.
+A rendszer MUST a lekérdezést a verziókezelt `Nav` szakasz `BaseUrl` és `Software` értékeivel küldeni. A `BaseUrl` a tesztkörnyezet vagy az éles környezet gyökere.
 
-#### Scenario: Teszt gyökér és szoftverazonosító
+#### Scenario: Engedélyezett gyökér és szoftverazonosító
 - **WHEN** a verziókezelt `Nav` szakasz a rögzített kezdőértékeket tartalmazza
-- **THEN** a `BaseUrl` értéke `https://api-test.onlineszamla.nav.gov.hu`, a `SoftwareId` értéke `HU-OSP-00000000001`, a `SoftwareName` értéke `OsaPro`, a `SoftwareOperation` értéke `ONLINE_SERVICE`, a `SoftwareMainVersion` értéke `1.0`, a `SoftwareDevName` értéke `OSP`, és a `SoftwareDevContact` értéke `info@nexande.ocm`
+- **THEN** a `BaseUrl` értéke `https://api-test.onlineszamla.nav.gov.hu` vagy `https://api.onlineszamla.nav.gov.hu`, a `SoftwareId` értéke `HU-OSP-00000000001`, a `SoftwareName` értéke `OsaPro`, a `SoftwareOperation` értéke `ONLINE_SERVICE`, a `SoftwareMainVersion` értéke `1.0`, a `SoftwareDevName` értéke `OSP`, és a `SoftwareDevContact` értéke `info@nexande.ocm`
 
 ### Requirement: Titkos NAV-kulcsok
 A rendszer MUST a technikai felhasználó bejelentkezési nevét, adószámát, jelszavát és aláírókulcsát a `Secrets` szakasz `NavLogin`, `NavTaxNumber`, `NavPassword` és `NavSigningKey` kulcsából használni.

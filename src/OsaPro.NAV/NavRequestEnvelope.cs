@@ -1,7 +1,7 @@
 using System.Text;
 using System.Xml.Linq;
 
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 internal static class NavNamespaces
 {

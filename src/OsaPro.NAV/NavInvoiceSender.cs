@@ -2,7 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Xml.Linq;
 
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 internal sealed class NavInvoiceSender : IDisposable
 {

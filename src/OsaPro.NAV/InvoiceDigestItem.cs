@@ -1,4 +1,4 @@
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 public sealed class InvoiceDigestItem
 {

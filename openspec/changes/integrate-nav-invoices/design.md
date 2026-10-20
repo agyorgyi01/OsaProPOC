@@ -10,7 +10,7 @@ Az `OsaPro.Common` betölti a konfigurációt, és a `Secrets` szakasz feloldott
 
 **Goals:**
 
-- Két, egymást nem hívó lekérdező metódus az `OsaPro.Common` könyvtárban. A hívó paramétert ad, és C# objektumot kap.
+- Két, egymást nem hívó lekérdező metódus az `OsaPro.NAV` könyvtárban. A hívó paramétert ad, és C# objektumot kap.
 - A NAV-kérés XML-je és az aláírása tesztből, élő NAV nélkül ellenőrizhető.
 - A verziókezelt `Nav` szakasz és a két új `Secrets` kulcsnév az `OsaPro.Worker` `appsettings.json` fájljában van.
 
@@ -22,16 +22,16 @@ Az `OsaPro.Common` betölti a konfigurációt, és a `Secrets` szakasz feloldott
 
 ## Decisions
 
-### 1. A lekérdezés az OsaPro.Common könyvtárban van
+### 1. A lekérdezés az OsaPro.NAV könyvtárban van
 
-Az `InboundInvoiceQuery` típus két publikus metódust ad:
+Az `InboundInvoiceQuery` az `OsaPro.NAV` osztálykönyvtárban van, és két publikus metódust ad:
 
 - `QueryInvoiceDigest(startDate, storedInsDate)` a kivonatlistát adja.
 - `QueryInvoiceData(invoiceNumber, supplierTaxNumber, batchIndex)` a teljes bizonylatot adja. A `batchIndex` csak kötegelt módosításnál kap értéket; egyébként a kérésből kimarad.
 
-A digest metódus nem hívja a bizonylatmetódust. A Worker handler üres marad. A teszt a metódusokat közvetlenül hívja.
+A digest metódus nem hívja a bizonylatmetódust. Az `OsaPro.Common` nem tartalmaz NAV-típust. Az `OsaPro.Worker` handlerje üres marad, és ebben a change-ben nem hivatkozza az `OsaPro.NAV` projektet. Az `OsaPro.NAV.Tests` a metódusokat közvetlenül hívja, és a verziókezelt beállítást meg a User Secretet az `OsaPro.Worker` projektből olvassa.
 
-Alternatíva: a metódusok az `OsaPro.Worker` handlerében. Elvetve, mert a dátumok kívülről jönnek, az időzítés későbbi change, és a handler bekötése Excel nélkül nem tudná a tárolt `InsDate` értékét előállítani.
+Alternatíva: a metódusok az `OsaPro.Common` könyvtárban. Elvetve, mert a NAV-modul külön projekt. Alternatíva: a metódusok az `OsaPro.Worker` handlerében. Elvetve, mert a dátumok kívülről jönnek, az időzítés későbbi change, és a handler bekötése Excel nélkül nem tudná a tárolt `InsDate` értékét előállítani.
 
 ### 2. A HTTP-hívás XML POST
 
@@ -83,7 +83,7 @@ Alternatíva: minden hibát újrapróbálni. Elvetve, mert az érvénytelen kér
 
 Az `OsaPro.Worker` `appsettings.json` fájlja:
 
-- `Nav:BaseUrl` = `https://api-test.onlineszamla.nav.gov.hu`
+- `Nav:BaseUrl` a `https://api-test.onlineszamla.nav.gov.hu` vagy a `https://api.onlineszamla.nav.gov.hu` érték. A fájl egyet tartalmaz a kettő közül.
 - `Nav:RetryCount` = `3`, `Nav:RetryDelaySeconds` = `5`
 - `Nav:Software` a proposalban rögzített szoftverazonosítókkal
 - `Secrets:NavLogin`, `Secrets:NavTaxNumber`, `Secrets:NavPassword` és `Secrets:NavSigningKey` üres értékkel
@@ -101,4 +101,4 @@ Alternatíva: a jelszó a `Nav` szakaszban. Elvetve, mert a maszkoló csak a `Se
 
 ## Migration Plan
 
-A handler üres marad, ezért a telepítés önmagában nem indít NAV-hívást. Visszavonáskor a `Nav` szakasz és a négy üres `Secrets` kulcsnév kivehető, a lekérdező típus törölhető. Adatmigráció nincs.
+A handler üres marad, ezért a telepítés önmagában nem indít NAV-hívást. Visszavonáskor a `Nav` szakasz és a négy üres `Secrets` kulcsnév kivehető, az `OsaPro.NAV` projekt törölhető. Adatmigráció nincs.

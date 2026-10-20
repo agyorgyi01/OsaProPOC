@@ -1,8 +1,8 @@
 using System.Globalization;
 using System.Xml.Linq;
-using InvoiceDocument = OsaPro.Common.Nav.InvoiceData.InvoiceData;
+using InvoiceDocument = OsaPro.NAV.InvoiceData.InvoiceData;
 
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 public sealed class InboundInvoiceQuery : IDisposable
 {

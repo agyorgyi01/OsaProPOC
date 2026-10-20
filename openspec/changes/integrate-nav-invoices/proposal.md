@@ -11,7 +11,7 @@ A bejövő számlák rögzítéséhez az OsaPro-nak a NAV Online Számla rendsze
 - A két lekérdezés két külön metódus. Mindkettő a NAV-válasz adattartalmát C# osztályokban adja vissza. A digest metódus minden lapot visszaad. A `CREATE`, `MODIFY` és `STORNO` tételek a válaszban maradnak. Üres ablak sikeres, üres lista.
 - A `queryInvoiceData` metódus csak akkor fut, ha a hívó külön kéri. A kérés a számlát egyértelművé tevő adatokat viszi: számlaszám, `INBOUND` irány, a kiállító adószáma, kötegelt módosításnál pedig a digest `batchIndex` értéke. A metódus a teljes bizonylatot adja vissza C# osztályokban. A kibocsátó bankszámlaszáma ennek a bizonylatnak a `supplierBankAccountNumber` mezője. Ha a számla nem tartalmazza, a mező üres, és a hívás sikeres.
 - Hibás vagy hiányos NAV-válasz nem számít sikeres ablaknak. Hálózati hiba, időtúllépés, HTTP 429 és HTTP 5xx után a hívás újrapróbálható. Az újrapróbálások száma a `Nav:RetryCount`, a két próbálkozás közötti szünet a `Nav:RetryDelaySeconds` verziókezelt appsettings paraméter. A kezdőérték `3` és `5`. A HTTP 200 melletti `funcCode` `ERROR` és a HTTP 4xx nem indul újra. A megszakított feldolgozás folytatása nem készül.
-- A verziókezelt `Nav` szakasz tartalmazza a `BaseUrl`, `RetryCount`, `RetryDelaySeconds` és `Software` adatokat, titkos érték nélkül. A `BaseUrl` a tesztkörnyezet gyökere: `https://api-test.onlineszamla.nav.gov.hu`. A szoftverazonosító mezők: `SoftwareId` `HU-OSP-00000000001`, `SoftwareName` `OsaPro`, `SoftwareOperation` `ONLINE_SERVICE`, `SoftwareMainVersion` `1.0`, `SoftwareDevName` `OSP`, `SoftwareDevContact` `info@nexande.ocm`.
+- A verziókezelt `Nav` szakasz tartalmazza a `BaseUrl`, `RetryCount`, `RetryDelaySeconds` és `Software` adatokat, titkos érték nélkül. A `BaseUrl` a tesztkörnyezet vagy az éles környezet gyökere: `https://api-test.onlineszamla.nav.gov.hu` vagy `https://api.onlineszamla.nav.gov.hu`. A szoftverazonosító mezők: `SoftwareId` `HU-OSP-00000000001`, `SoftwareName` `OsaPro`, `SoftwareOperation` `ONLINE_SERVICE`, `SoftwareMainVersion` `1.0`, `SoftwareDevName` `OSP`, `SoftwareDevContact` `info@nexande.ocm`.
 - A technikai felhasználó bejelentkezési neve, adószáma, jelszava és aláírókulcsa a `Secrets` szakasz `NavLogin`, `NavTaxNumber`, `NavPassword` és `NavSigningKey` kulcsa. Az értékük forráson kívül marad. Cserekulcs és `/tokenExchange` nem kell.
 
 Nem része ennek a change-nek az Excel olvasása és írása, az `InsDate` mentése, a naptári év és a már rögzített sorok szűrése, az ütemezés, az értesítés, valamint a számla-beküldés.
@@ -28,7 +28,7 @@ Nem része ennek a change-nek az Excel olvasása és írása, az `InsDate` ment�
 
 ## Impact
 
-- Új NAV-lekérdező kód és teszt az `OsaPro.Common` és az `OsaPro.Worker` meglévő megoldásában. A számlafeldolgozás handlerje nem kap időzítőt, és nem olvas Excelt.
+- Új `OsaPro.NAV` osztálykönyvtár és `OsaPro.NAV.Tests` tesztprojekt. A lekérdező kód nem az `OsaPro.Common` része. A `Nav` beállítás az `OsaPro.Worker` `appsettings.json` fájljában marad. A számlafeldolgozás handlerje nem hivatkozza a NAV-projektet, nem kap időzítőt, és nem olvas Excelt.
 - Új verziókezelt `Nav` szakasz. A `Secrets` szakasz négy új kulcsnevet kap, érték nélkül.
 - Külső rendszer: NAV Online Számla teszt interfész. Excel, SharePoint és Slack nem érintett.
 

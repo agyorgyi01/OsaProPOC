@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace OsaPro.Common.Nav.InvoiceData
+namespace OsaPro.NAV.InvoiceData
 {
     
     
@@ -520,12 +520,12 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("supplierTaxNumber")]
-        public OsaPro.Common.Nav.InvoiceBase.TaxNumberType SupplierTaxNumber { get; set; }
+        public OsaPro.NAV.InvoiceBase.TaxNumberType SupplierTaxNumber { get; set; }
         
         [System.Diagnostics.CodeAnalysis.AllowNullAttribute()]
         [System.Diagnostics.CodeAnalysis.MaybeNullAttribute()]
         [System.Xml.Serialization.XmlElementAttribute("groupMemberTaxNumber")]
-        public OsaPro.Common.Nav.InvoiceBase.TaxNumberType GroupMemberTaxNumber { get; set; }
+        public OsaPro.NAV.InvoiceBase.TaxNumberType GroupMemberTaxNumber { get; set; }
         
         [System.ComponentModel.DataAnnotations.MinLengthAttribute(4)]
         [System.ComponentModel.DataAnnotations.MaxLengthAttribute(15)]
@@ -544,7 +544,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("supplierAddress")]
-        public OsaPro.Common.Nav.InvoiceBase.AddressType SupplierAddress { get; set; }
+        public OsaPro.NAV.InvoiceBase.AddressType SupplierAddress { get; set; }
         
         [System.ComponentModel.DataAnnotations.MinLengthAttribute(15)]
         [System.ComponentModel.DataAnnotations.MaxLengthAttribute(34)]
@@ -598,7 +598,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         [System.Diagnostics.CodeAnalysis.AllowNullAttribute()]
         [System.Diagnostics.CodeAnalysis.MaybeNullAttribute()]
         [System.Xml.Serialization.XmlElementAttribute("customerAddress")]
-        public OsaPro.Common.Nav.InvoiceBase.AddressType CustomerAddress { get; set; }
+        public OsaPro.NAV.InvoiceBase.AddressType CustomerAddress { get; set; }
         
         [System.ComponentModel.DataAnnotations.MinLengthAttribute(15)]
         [System.ComponentModel.DataAnnotations.MaxLengthAttribute(34)]
@@ -645,13 +645,13 @@ namespace OsaPro.Common.Nav.InvoiceData
     [System.Xml.Serialization.XmlTypeAttribute("CustomerTaxNumberType", Namespace="http://schemas.nav.gov.hu/OSA/3.0/data")]
     [System.Diagnostics.DebuggerStepThroughAttribute()]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
-    public partial class CustomerTaxNumberType : OsaPro.Common.Nav.InvoiceBase.TaxNumberType
+    public partial class CustomerTaxNumberType : OsaPro.NAV.InvoiceBase.TaxNumberType
     {
         
         [System.Diagnostics.CodeAnalysis.AllowNullAttribute()]
         [System.Diagnostics.CodeAnalysis.MaybeNullAttribute()]
         [System.Xml.Serialization.XmlElementAttribute("groupMemberTaxNumber")]
-        public OsaPro.Common.Nav.InvoiceBase.TaxNumberType GroupMemberTaxNumber { get; set; }
+        public OsaPro.NAV.InvoiceBase.TaxNumberType GroupMemberTaxNumber { get; set; }
     }
     
     [System.CodeDom.Compiler.GeneratedCodeAttribute("XmlSchemaClassGenerator", "3.0.1405.0")]
@@ -664,7 +664,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("fiscalRepresentativeTaxNumber")]
-        public OsaPro.Common.Nav.InvoiceBase.TaxNumberType FiscalRepresentativeTaxNumber { get; set; }
+        public OsaPro.NAV.InvoiceBase.TaxNumberType FiscalRepresentativeTaxNumber { get; set; }
         
         [System.ComponentModel.DataAnnotations.MinLengthAttribute(1)]
         [System.ComponentModel.DataAnnotations.MaxLengthAttribute(512)]
@@ -675,7 +675,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("fiscalRepresentativeAddress")]
-        public OsaPro.Common.Nav.InvoiceBase.AddressType FiscalRepresentativeAddress { get; set; }
+        public OsaPro.NAV.InvoiceBase.AddressType FiscalRepresentativeAddress { get; set; }
         
         [System.ComponentModel.DataAnnotations.MinLengthAttribute(15)]
         [System.ComponentModel.DataAnnotations.MaxLengthAttribute(34)]
@@ -697,7 +697,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("invoiceCategory")]
-        public OsaPro.Common.Nav.InvoiceBase.InvoiceCategoryType InvoiceCategory { get; set; }
+        public OsaPro.NAV.InvoiceBase.InvoiceCategoryType InvoiceCategory { get; set; }
         
         [System.ComponentModel.DataAnnotations.RegularExpressionAttribute("\\d{4}-\\d{2}-\\d{2}")]
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
@@ -761,7 +761,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         public bool SelfBillingIndicatorSpecified { get; set; }
         
         [System.Xml.Serialization.XmlElementAttribute("paymentMethod")]
-        public OsaPro.Common.Nav.InvoiceBase.PaymentMethodType PaymentMethod { get; set; }
+        public OsaPro.NAV.InvoiceBase.PaymentMethodType PaymentMethod { get; set; }
         
         [System.Xml.Serialization.XmlIgnoreAttribute()]
         public bool PaymentMethodSpecified { get; set; }
@@ -781,7 +781,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("invoiceAppearance")]
-        public OsaPro.Common.Nav.InvoiceBase.InvoiceAppearanceType InvoiceAppearance { get; set; }
+        public OsaPro.NAV.InvoiceBase.InvoiceAppearanceType InvoiceAppearance { get; set; }
         
         [System.Diagnostics.CodeAnalysis.AllowNullAttribute()]
         [System.Diagnostics.CodeAnalysis.MaybeNullAttribute()]
@@ -2403,7 +2403,7 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("purchaseLocation")]
-        public OsaPro.Common.Nav.InvoiceBase.SimpleAddressType PurchaseLocation { get; set; }
+        public OsaPro.NAV.InvoiceBase.SimpleAddressType PurchaseLocation { get; set; }
         
         [System.ComponentModel.DataAnnotations.RegularExpressionAttribute("\\d{4}-\\d{2}-\\d{2}")]
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
@@ -2583,11 +2583,11 @@ namespace OsaPro.Common.Nav.InvoiceData
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("obligatedAddress")]
-        public OsaPro.Common.Nav.InvoiceBase.AddressType ObligatedAddress { get; set; }
+        public OsaPro.NAV.InvoiceBase.AddressType ObligatedAddress { get; set; }
         
         [System.ComponentModel.DataAnnotations.RequiredAttribute(AllowEmptyStrings=true)]
         [System.Xml.Serialization.XmlElementAttribute("obligatedTaxNumber")]
-        public OsaPro.Common.Nav.InvoiceBase.TaxNumberType ObligatedTaxNumber { get; set; }
+        public OsaPro.NAV.InvoiceBase.TaxNumberType ObligatedTaxNumber { get; set; }
     }
     
     [System.CodeDom.Compiler.GeneratedCodeAttribute("XmlSchemaClassGenerator", "3.0.1405.0")]

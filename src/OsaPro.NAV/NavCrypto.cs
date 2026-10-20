@@ -1,7 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 internal static class NavCrypto
 {

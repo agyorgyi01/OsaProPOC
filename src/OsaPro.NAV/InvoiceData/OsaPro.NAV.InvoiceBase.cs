@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace OsaPro.Common.Nav.InvoiceBase
+namespace OsaPro.NAV.InvoiceBase
 {
     
     
@@ -238,7 +238,7 @@ namespace OsaPro.Common.Nav.InvoiceBase
     [System.Xml.Serialization.XmlTypeAttribute("TaxNumberType", Namespace="http://schemas.nav.gov.hu/OSA/3.0/base")]
     [System.Diagnostics.DebuggerStepThroughAttribute()]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
-    [System.Xml.Serialization.XmlIncludeAttribute(typeof(OsaPro.Common.Nav.InvoiceData.CustomerTaxNumberType))]
+    [System.Xml.Serialization.XmlIncludeAttribute(typeof(OsaPro.NAV.InvoiceData.CustomerTaxNumberType))]
     public partial class TaxNumberType
     {
         

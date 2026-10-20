@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 internal static class NavTimestamps
 {

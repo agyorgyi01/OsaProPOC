@@ -8,7 +8,7 @@
 // </auto-generated>
 //------------------------------------------------------------------------------
 
-namespace OsaPro.Common.Nav.InvoiceCommon
+namespace OsaPro.NAV.InvoiceCommon
 {
     
     

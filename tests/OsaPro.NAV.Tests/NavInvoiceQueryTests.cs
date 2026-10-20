@@ -6,15 +6,15 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Xml.Linq;
 using Microsoft.Extensions.Configuration;
-using OsaPro.Common.Nav;
-using OsaPro.Common.Nav.InvoiceData;
+using OsaPro.Common;
+using OsaPro.NAV;
+using OsaPro.Worker;
+using InvoiceDocument = OsaPro.NAV.InvoiceData.InvoiceData;
 
-namespace OsaPro.Common.Tests;
+namespace OsaPro.NAV.Tests;
 
 public class NavInvoiceQueryTests
 {
-    private const string Password = "jelszo";
-    private const string SigningKey = "alairkulcs";
     private static readonly DateTimeOffset ClockTime = new(2026, 10, 20, 5, 29, 0, TimeSpan.Zero);
 
     [Fact]
@@ -24,7 +24,13 @@ public class NavInvoiceQueryTests
         var options = NavOptions.FromConfiguration(configuration);
         var text = File.ReadAllText(FindVersionedAppSettings());
 
-        Assert.Equal("https://api-test.onlineszamla.nav.gov.hu", options.BaseUrl);
+        Assert.Contains(
+            options.BaseUrl,
+            new[]
+            {
+                "https://api-test.onlineszamla.nav.gov.hu",
+                "https://api.onlineszamla.nav.gov.hu"
+            });
         Assert.Equal(3, options.RetryCount);
         Assert.Equal(5, options.RetryDelaySeconds);
         Assert.Equal("HU-OSP-00000000001", options.Software.SoftwareId);
@@ -41,41 +47,44 @@ public class NavInvoiceQueryTests
         Assert.Equal("", configuration["Secrets:NavTaxNumber"]);
         Assert.Equal("", configuration["Secrets:NavPassword"]);
         Assert.Equal("", configuration["Secrets:NavSigningKey"]);
-        Assert.DoesNotContain(Password, text, StringComparison.Ordinal);
-        Assert.DoesNotContain(SigningKey, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("jelszo", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("alairkulcs", text, StringComparison.Ordinal);
     }
 
     [Fact]
     public async Task Request_contains_hashes_software_and_no_raw_secret()
     {
+        var options = RequireOptions();
         var handler = OkDigest();
         var delays = new List<TimeSpan>();
-        using var query = Create(handler, delays, () => "TESTREQ0001");
+        using var query = Create(handler, delays, () => "TESTREQ0001", options: options);
 
         await query.QueryInvoiceDigest(new DateOnly(2026, 1, 1), ClockTime, CancellationToken.None);
 
-        var xml = XDocument.Parse(handler.Bodies.Single());
-        var passwordHash = Convert.ToHexString(SHA512.HashData(Encoding.UTF8.GetBytes(Password)));
-        var signature = Convert.ToHexString(SHA3_512.HashData(Encoding.UTF8.GetBytes("TESTREQ0001" + "20261020052900" + SigningKey)));
+        var body = handler.Bodies.Single();
+        var xml = XDocument.Parse(body);
+        var passwordHash = Convert.ToHexString(SHA512.HashData(Encoding.UTF8.GetBytes(options.Password)));
+        var signature = Convert.ToHexString(SHA3_512.HashData(Encoding.UTF8.GetBytes("TESTREQ0001" + "20261020052900" + options.SigningKey)));
         Assert.Equal(passwordHash, Value(xml, "passwordHash"));
         Assert.Equal("SHA-512", Attribute(xml, "passwordHash", "cryptoType"));
         Assert.Equal(signature, Value(xml, "requestSignature"));
         Assert.Equal("SHA3-512", Attribute(xml, "requestSignature", "cryptoType"));
         Assert.Equal("3.0", Value(xml, "requestVersion"));
         Assert.Equal("INBOUND", Value(xml, "invoiceDirection"));
-        Assert.Equal("teszt-login", Value(xml, "login"));
-        Assert.Equal("12345678", Value(xml, "taxNumber"));
-        Assert.Equal("HU-OSP-00000000001", Value(xml, "softwareId"));
-        Assert.Equal("OsaPro", Value(xml, "softwareName"));
-        Assert.Equal("ONLINE_SERVICE", Value(xml, "softwareOperation"));
-        Assert.Equal("1.0", Value(xml, "softwareMainVersion"));
-        Assert.Equal("OSP", Value(xml, "softwareDevName"));
-        Assert.Equal("info@nexande.ocm", Value(xml, "softwareDevContact"));
-        Assert.DoesNotContain(Password, handler.Bodies.Single(), StringComparison.Ordinal);
-        Assert.DoesNotContain(SigningKey, handler.Bodies.Single(), StringComparison.Ordinal);
+        Assert.Equal(options.Login, Value(xml, "login"));
+        Assert.Equal(options.TaxNumber, Value(xml, "taxNumber"));
+        Assert.Equal(options.Software.SoftwareId, Value(xml, "softwareId"));
+        Assert.Equal(options.Software.SoftwareName, Value(xml, "softwareName"));
+        Assert.Equal(options.Software.SoftwareOperation, Value(xml, "softwareOperation"));
+        Assert.Equal(options.Software.SoftwareMainVersion, Value(xml, "softwareMainVersion"));
+        Assert.Equal(options.Software.SoftwareDevName, Value(xml, "softwareDevName"));
+        Assert.Equal(options.Software.SoftwareDevContact, Value(xml, "softwareDevContact"));
+        Assert.DoesNotContain(options.Password, body, StringComparison.Ordinal);
+        Assert.DoesNotContain(options.SigningKey, body, StringComparison.Ordinal);
         Assert.DoesNotContain("tokenExchange", handler.Bodies.Single(), StringComparison.OrdinalIgnoreCase);
         var request = handler.Requests.Single();
-        Assert.Contains("/invoiceService/v3/queryInvoiceDigest", request.RequestUri!.AbsoluteUri, StringComparison.Ordinal);
+        Assert.StartsWith(options.BaseUrl.TrimEnd('/'), request.RequestUri!.AbsoluteUri, StringComparison.Ordinal);
+        Assert.Contains("/invoiceService/v3/queryInvoiceDigest", request.RequestUri.AbsoluteUri, StringComparison.Ordinal);
         Assert.Equal("application/xml", request.Content!.Headers.ContentType!.MediaType);
         Assert.Equal("utf-8", request.Content.Headers.ContentType!.CharSet);
         Assert.Contains(request.Headers.Accept, header => header.MediaType == "application/xml");
@@ -89,11 +98,12 @@ public class NavInvoiceQueryTests
     [InlineData("500")]
     public async Task Transient_failure_retries_three_times_without_sleeping(string kind)
     {
+        var options = RequireOptions();
         var calls = 0;
         var handler = new ScriptedHandler((call, _) =>
         {
             calls++;
-            if (call < 3)
+            if (call < options.RetryCount)
             {
                 return kind switch
                 {
@@ -109,15 +119,15 @@ public class NavInvoiceQueryTests
         });
         var delays = new List<TimeSpan>();
         var watch = Stopwatch.StartNew();
-        using var query = Create(handler, delays, () => "TESTREQ0001");
+        using var query = Create(handler, delays, () => "TESTREQ0001", options: options);
 
         var items = await query.QueryInvoiceDigest(new DateOnly(2026, 1, 1), ClockTime, CancellationToken.None);
 
         watch.Stop();
         Assert.Empty(items);
-        Assert.Equal(4, calls);
-        Assert.Equal(3, delays.Count);
-        Assert.All(delays, delay => Assert.Equal(TimeSpan.FromSeconds(5), delay));
+        Assert.Equal(options.RetryCount + 1, calls);
+        Assert.Equal(options.RetryCount, delays.Count);
+        Assert.All(delays, delay => Assert.Equal(TimeSpan.FromSeconds(options.RetryDelaySeconds), delay));
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(2));
         Assert.Single(handler.Bodies.Distinct());
     }
@@ -225,15 +235,16 @@ public class NavInvoiceQueryTests
     [Fact]
     public async Task Failed_later_slice_does_not_return_a_partial_list()
     {
+        var options = RequireOptions();
         var handler = new ScriptedHandler((call, _) => call == 0
             ? Xml(DigestResponse(1, 1, Item("CREATE", "SZ-1")))
             : Status(HttpStatusCode.InternalServerError));
-        using var query = Create(handler, [], () => "TESTREQ0001", new DateTimeOffset(2026, 3, 20, 12, 0, 0, TimeSpan.Zero));
+        using var query = Create(handler, [], () => "TESTREQ0001", new DateTimeOffset(2026, 3, 20, 12, 0, 0, TimeSpan.Zero), options);
 
         await Assert.ThrowsAsync<NavQueryException>(() =>
             query.QueryInvoiceDigest(new DateOnly(2026, 1, 1), new DateTimeOffset(2026, 1, 1, 8, 0, 0, TimeSpan.Zero), CancellationToken.None));
 
-        Assert.Equal(5, handler.Bodies.Count);
+        Assert.Equal(2 + options.RetryCount, handler.Bodies.Count);
     }
 
     [Fact]
@@ -273,13 +284,13 @@ public class NavInvoiceQueryTests
     [Fact]
     public void Common_namespace_matches_the_vendored_schema()
     {
-        var schema = File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.Common", "Nav", "Schemas", "common.xsd")));
+        var schema = File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.NAV", "Schemas", "common.xsd")));
         Assert.Contains("targetNamespace=\"http://schemas.nav.gov.hu/NTCA/1.0/common\"", schema, StringComparison.Ordinal);
-        var data = File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.Common", "Nav", "Schemas", "invoiceData.xsd")));
+        var data = File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.NAV", "Schemas", "invoiceData.xsd")));
         Assert.Contains("targetNamespace=\"http://schemas.nav.gov.hu/OSA/3.0/data\"", data, StringComparison.Ordinal);
     }
 
-    private static string BankAccount(InvoiceData invoice)
+    private static string BankAccount(InvoiceDocument invoice)
     {
         return invoice.InvoiceMain?.Invoice?.InvoiceHead?.SupplierInfo?.SupplierBankAccountNumber ?? "";
     }
@@ -288,11 +299,12 @@ public class NavInvoiceQueryTests
         ScriptedHandler handler,
         List<TimeSpan> delays,
         Func<string> requestIds,
-        DateTimeOffset? clock = null)
+        DateTimeOffset? clock = null,
+        NavOptions? options = null)
     {
         var now = clock ?? ClockTime;
         return new InboundInvoiceQuery(
-            Options(),
+            options ?? RequireOptions(),
             handler,
             () => now,
             (span, _) =>
@@ -303,27 +315,33 @@ public class NavInvoiceQueryTests
             requestIds);
     }
 
-    private static NavOptions Options()
+    private static NavOptions RequireOptions()
     {
-        return new NavOptions
+        var contentRoot = Path.GetDirectoryName(FindVersionedAppSettings())
+            ?? throw new InvalidOperationException("A verziókezelt appsettings.json könyvtára nem olvasható.");
+        var builder = new ConfigurationBuilder();
+        SecretConfiguration.AddSources(
+            builder,
+            contentRoot,
+            includeUserSecrets: true,
+            userSecretsId: WorkerComposition.UserSecretsId);
+        var options = NavOptions.FromConfiguration(builder.Build());
+        var missing = new (string Name, string Value)[]
         {
-            BaseUrl = "https://api-test.onlineszamla.nav.gov.hu",
-            RetryCount = 3,
-            RetryDelaySeconds = 5,
-            Login = "teszt-login",
-            TaxNumber = "12345678",
-            Password = Password,
-            SigningKey = SigningKey,
-            Software = new NavSoftwareOptions
-            {
-                SoftwareId = "HU-OSP-00000000001",
-                SoftwareName = "OsaPro",
-                SoftwareOperation = "ONLINE_SERVICE",
-                SoftwareMainVersion = "1.0",
-                SoftwareDevName = "OSP",
-                SoftwareDevContact = "info@nexande.ocm"
-            }
-        };
+            ("NavLogin", options.Login),
+            ("NavTaxNumber", options.TaxNumber),
+            ("NavPassword", options.Password),
+            ("NavSigningKey", options.SigningKey)
+        }
+        .Where(item => string.IsNullOrWhiteSpace(item.Value))
+        .Select(item => item.Name)
+        .ToArray();
+        if (missing.Length > 0)
+        {
+            Assert.Fail($"A NAV titkos kulcsok üresek ({string.Join(", ", missing)}). A teszt nem hívja a NAV-ot.");
+        }
+
+        return options;
     }
 
     private static ScriptedHandler OkDigest()

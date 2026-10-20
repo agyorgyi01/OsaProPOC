@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 
-namespace OsaPro.Common.Nav;
+namespace OsaPro.NAV;
 
 public sealed class NavSoftwareOptions
 {
