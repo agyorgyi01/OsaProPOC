@@ -32,5 +32,4 @@
 
 ## Workflow follow-up
 
-- A felülvizsgált fájl-API terv feladatai elkészültek. Archiválás és a delta specek szinkronja továbbra is külön explicit jóváhagyást igényel.
-- Az implementáció és a kódellenőrzés lezárása után a change archiválható. A delta specek szinkronja külön explicit jóváhagyást igényel.
+- A felülvizsgált fájl-API terv feladatai elkészültek. A delta spec szinkronja és az archiválás jóvá van hagyva. A főágra emelés külön jóváhagyás.

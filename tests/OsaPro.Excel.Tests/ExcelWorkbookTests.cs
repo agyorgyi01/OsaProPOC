@@ -200,11 +200,11 @@ public class ExcelWorkbookTests
     }
 
     [Fact]
-    public async Task Failed_checkout_is_retried_then_stops_without_download_checkin_or_insdate_change()
+    public async Task Later_call_downloads_only_after_checkout_returns_204()
     {
         var delays = new List<TimeSpan>();
-        var handler = new GraphDouble { CheckoutStatus = HttpStatusCode.Conflict };
-        var original = WorkbookFile.Create(2026, 5, "kept-ins", "7,5,1");
+        var handler = new GraphDouble { CheckoutRejections = 4 };
+        var original = WorkbookFile.Create(2026, 1, "kept-ins", "7,5,1");
         handler.Add("SZÁMLÁK2026.xlsx", original);
         using var workbook = Create(handler, delays, Options());
 
@@ -220,8 +220,15 @@ public class ExcelWorkbookTests
         Assert.DoesNotContain("secret-1", error.Message, StringComparison.Ordinal);
         Assert.Empty(typeof(ExcelWorkbookException).GetProperties(BindingFlags.Instance | BindingFlags.Public | BindingFlags.DeclaredOnly));
 
-        await Assert.ThrowsAsync<ExcelWorkbookException>(() => workbook.EnsureMonth(2026, 5));
-        Assert.Equal(8, handler.Calls.Count(call => call.Url.EndsWith("/checkout", StringComparison.Ordinal)));
+        await workbook.EnsureMonth(2026, 5);
+
+        Assert.Equal(5, handler.Calls.Count(call => call.Url.EndsWith("/checkout", StringComparison.Ordinal)));
+        Assert.Contains(handler.Calls, call => call.Url.Contains("/content", StringComparison.Ordinal));
+        Assert.Contains(handler.Calls, call => call.Url.EndsWith("/checkin", StringComparison.Ordinal));
+        using var document = SpreadsheetDocument.Open(new MemoryStream(handler.Files["SZÁMLÁK2026.xlsx"]), false);
+        var names = document.WorkbookPart!.Workbook.Sheets!.Elements<Sheet>().Select(sheet => sheet.Name!.Value).ToList();
+        Assert.Equal(["Paraméterek", "Január", "Május"], names);
+        Assert.Equal("kept-ins", Text(document.WorkbookPart, "Paraméterek", "B1"));
     }
 
     [Fact]
@@ -461,6 +468,8 @@ public class ExcelWorkbookTests
 
         public int CheckoutThrows { get; set; }
 
+        public int CheckoutRejections { get; set; }
+
         public string? FailDownloadsContaining { get; init; }
 
         public HttpStatusCode? SiteStatus { get; init; }
@@ -558,6 +567,12 @@ public class ExcelWorkbookTests
                 {
                     CheckoutThrows--;
                     throw new HttpRequestException("A kapcsolat megszakadt.");
+                }
+
+                if (CheckoutRejections > 0)
+                {
+                    CheckoutRejections--;
+                    return Status(HttpStatusCode.Conflict);
                 }
 
                 return Status(CheckoutStatus);
