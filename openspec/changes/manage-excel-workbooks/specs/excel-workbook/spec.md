@@ -44,7 +44,7 @@ A rendszer MUST a fájlnév, a munkalapnév, a fejléc, a paraméterkulcs és a 
 - **THEN** a rendszer ezt az `InsDate` kulcsnak tekinti
 
 ### Requirement: Éves fájl neve és mappája
-A rendszer MUST az éves fájlt `SZÁMLÁKYYYY.xlsx` néven, a konfigurált SharePoint-mappában keresni és létrehozni. A keresés a nagybetűs néven történik, az ékezetek megtartásával. A rendszer MUST NOT másik mappában keresni.
+A rendszer MUST az éves fájlt `SZÁMLÁKYYYY.xlsx` néven, a konfigurált SharePoint-mappában keresni és létrehozni. A keresés a nagybetűs néven történik, az ékezetek megtartásával, a mappa további listázási lapjain is. A rendszer MUST NOT másik mappában keresni.
 
 #### Scenario: 2026-os fájl
 - **WHEN** a hívó a 2026-os évet kéri
@@ -61,6 +61,10 @@ A rendszer MUST az éves fájlt `SZÁMLÁKYYYY.xlsx` néven, a konfigurált Shar
 #### Scenario: Előző év ugyanabban a mappában
 - **WHEN** a rendszer a 2026-os fájl paramétereihez az előző év fájlját olvassa
 - **THEN** a fájl neve `SZÁMLÁK2025.xlsx`, és ugyanabban a mappában van
+
+#### Scenario: A fájl a lista későbbi lapján van
+- **WHEN** a mappa első listázási lapján nincs `SZÁMLÁK2026.xlsx`, és a következő lapon megvan
+- **THEN** a rendszer ezt a fájlt használja, és nem hoz létre másik `SZÁMLÁK2026.xlsx` fájlt
 
 ### Requirement: Új éves fájl lapjai
 A rendszer MUST a hiányzó éves fájlt a `Paraméterek` lappal és csak a kért havi lappal létrehozni. A rendszer MUST NOT a többi havi lapot létrehozni, és MUST NOT sablonfájlt használni.
@@ -107,11 +111,15 @@ A rendszer MUST a havi lap oszlopait az első sor nagybetűs fejléce alapján a
 - **THEN** a rendszer a `Bankszamlaszam` oszlopot nem a `Bankszámlaszám` oszlopnak tekinti
 
 ### Requirement: Hiányzó oszlop beszúrása
-A rendszer MUST minden hiányzó elfogadott oszlopot beszúrni, akár mind a tizenhat hiányzik. A művelet emiatt MUST sikeres maradni. A tőle jobbra lévő oszlopok a saját fejlécükkel és adataikkal együtt csúsznak el. Az új oszlopban csak a fejléc készül el. A rendszer MUST NOT meglévő oszlopot átnevezni, törölni vagy átrendezni.
+A rendszer MUST minden hiányzó elfogadott oszlopot beszúrni, akár mind a tizenhat hiányzik. A művelet emiatt MUST sikeres maradni. A tőle jobbra lévő cellák a tárolt értékükkel, a képletük szövegével és a cellastílusukkal csúsznak el. A képleten belüli hivatkozás nem számolódik újra. Az új oszlopban csak a fejléc készül el. A rendszer MUST NOT meglévő oszlopot átnevezni, törölni vagy átrendezni, és MUST NOT egyesített cellát, táblát vagy diagramot átírni.
 
 #### Scenario: Bankszámlaszám hiányzik
 - **WHEN** az első sorban a `Partner neve` és az `Adószám` után a `Számlasorszám` áll, és a `Bankszámlaszám` nincs a sorban
 - **THEN** a `Bankszámlaszám` az `Adószám` és a `Számlasorszám` közé kerül, a `Számlasorszám` oszlopa jobbra csúszik, és az új oszlopban csak a fejléc van kitöltve
+
+#### Scenario: Képlet szövege a csúszó cellában
+- **WHEN** a beszúrás helyétől jobbra lévő cella képlete `=B2`
+- **THEN** a cella jobbra csúszik, és a képlet szövege `=B2` marad
 
 #### Scenario: Idegen oszlop a kanonikusak között
 - **WHEN** az első sor `Partner neve`, `Adószám`, `Saját`, `Számlasorszám`, és a `Bankszámlaszám` nincs a sorban
@@ -217,8 +225,8 @@ A rendszer MUST saját jogon, felhasználó nélkül bejelentkezni. A rendszer M
 - **WHEN** a verziókezelt konfiguráció az `Excel` és a `Secrets` szakaszt tartalmazza
 - **THEN** az `ExcelTenantId`, az `ExcelClientId` és az `ExcelClientSecret` értéke nincs a fájlban
 
-### Requirement: Csak a beállított dokumentumtár
-A rendszer MUST a `Lists.SelectedOperations.Selected` alkalmazásjogosultságot írási joggal, csak a webhely alapértelmezett dokumentumtárára használni. A rendszer MUST a tárban csak a `FolderPath` mappát használni.
+### Requirement: Csak a beállított mappa
+A rendszer MUST a webhely alapértelmezett dokumentumtárában csak a `FolderPath` mappát használni.
 
 #### Scenario: Más tár
 - **WHEN** a webhelyen az alapértelmezett dokumentumtáron kívül másik tár vagy lista is van
@@ -229,7 +237,7 @@ A rendszer MUST a `Lists.SelectedOperations.Selected` alkalmazásjogosultságot 
 - **THEN** a rendszer abban nem keres és nem hoz létre fájlt
 
 ### Requirement: Újrapróbálás átmeneti Graph-hiba után
-A rendszer MUST a hálózati hiba, az időtúllépés, a HTTP 429 és a HTTP 5xx után a hívást az `Excel` szakasz `RetryCount` értékének megfelelő számú alkalommal újrapróbálni, két próbálkozás között `RetryDelaySeconds` másodpercet várva. Ezek a paraméterek MUST a `Nav` szakasztól függetlenek lenni.
+A rendszer MUST a checkouton kívüli hívás hálózati hibája, időtúllépése, HTTP 429 és HTTP 5xx válasza után a hívást az `Excel` szakasz `RetryCount` értékének megfelelő számú alkalommal újrapróbálni, két próbálkozás között `RetryDelaySeconds` másodpercet várva. Ezek a paraméterek MUST a `Nav` szakasztól függetlenek lenni. A checkout köre MUST NOT ezt a kört fogyasztani.
 
 #### Scenario: Verziókezelt kezdőérték
 - **WHEN** a verziókezelt `Excel` szakasz a kezdőértékeket tartalmazza
@@ -239,9 +247,49 @@ A rendszer MUST a hálózati hiba, az időtúllépés, a HTTP 429 és a HTTP 5xx
 - **WHEN** az első Graph-hívás átmeneti kommunikációs hiba miatt meghiúsul, és a `RetryCount` értéke `3`
 - **THEN** a rendszer ugyanazt a kérést még háromszor elküldi, a próbálkozások között `RetryDelaySeconds` másodperc szünettel
 
-### Requirement: Zárolt munkafüzet nem indul újra
-A rendszer MUST a zárolt vagy ütköző munkafüzetet újrapróbálás nélkül sikertelen műveletként visszaadni. A már meglévő lapok MUST megmaradni.
+### Requirement: Meglévő fájl foglalása
+A rendszer MUST a meglévő éves fájlt checkouttal lefoglalni, és csak `204` válasz után letölteni, helyben módosítani, visszatölteni és checkinelni. `204` nélkül a rendszer MUST NOT letölteni és MUST NOT checkinelni. A következő hívás MUST újra checkoutot kérni, és csak az új `204` után MUST továbbmenni. Ismeretlen foglalást a rendszer MUST NOT feloldani.
 
-#### Scenario: A felhasználó megnyitotta a fájlt
-- **WHEN** a Graph a munkafüzet zárolása vagy írási ütközés miatt utasítja el a hívást
-- **THEN** a rendszer nem küldi újra a kérést, a művelet sikertelen, és a meglévő lapok változatlanok
+#### Scenario: Sikeres foglalás
+- **WHEN** a checkout `204` választ ad
+- **THEN** a rendszer letölti a fájlt, helyben módosítja, visszatölti és checkineli
+
+#### Scenario: A foglalás nem sikerül
+- **WHEN** a checkout nem ad `204` választ
+- **THEN** a rendszer nem tölt le és nem checkinel, és a művelet sikertelen
+
+#### Scenario: Új hívás a megmaradt foglalás után
+- **WHEN** egy korábbi hívás checkoutja megmaradt, és az új checkout `204` választ ad
+- **THEN** a rendszer csak ekkor tölt le és módosít
+
+### Requirement: A foglalás saját újrapróbálása
+A rendszer MUST a checkout nem `204` válaszát, a hálózati hibát is, az első hívás után az `Excel` szakasz `RetryCount` értékének megfelelő számú alkalommal újrapróbálni, két próbálkozás között `RetryDelaySeconds` másodpercet várva. Ez a kör MUST a többi Graph-hívás körétől független lenni. Új checkout-kulcs MUST NOT készülni.
+
+#### Scenario: Három további foglalási próba
+- **WHEN** az első checkout nem `204`, és a `RetryCount` értéke `3`
+- **THEN** a rendszer a checkoutot még háromszor elküldi, a próbák között `RetryDelaySeconds` másodperc szünettel, letöltés nélkül
+
+### Requirement: Új fájl névütközése
+A rendszer MUST a hiányzó éves fájlt checkout nélkül, `conflictBehavior=fail` feltöltéssel létrehozni. Ha a név már foglalt, a rendszer MUST NOT lecserélni és MUST NOT átnevezni a fájlt. A rendszer MUST a meglévő fájl foglalási útján továbbmenni.
+
+#### Scenario: A név közben elkészül
+- **WHEN** a létrehozó feltöltés jelzi, hogy a `SZÁMLÁK2026.xlsx` név már foglalt
+- **THEN** a rendszer nem tölt fel helyettesítő tartalmat, nem nevez át fájlt, és a meglévő fájlt foglalja le
+
+### Requirement: Sikertelen művelet
+A rendszer MUST minden hibát siker nélküli kivételként visszaadni. A szöveg évet, hónapot és fájlnevet tartalmazhat. Cellatartalom és titok MUST NOT szerepelni. A rendszer MUST NOT `InsDate` értéket írni, és MUST NOT értesítést küldeni. A rendszer MUST NOT külön hibaokot készíteni a későbbi összesítőnek.
+
+#### Scenario: Foglalás vagy írás hibája
+- **WHEN** a foglalás, a letöltés, a módosítás, a visszatöltés vagy a checkin sikertelen
+- **THEN** a művelet kivétellel ér véget, az `InsDate` nem változik, és értesítés nem megy ki
+
+### Requirement: Előző év fájlja csak olvasható
+A rendszer MUST az előző év meglévő fájlját checkout nélkül olvasni, és MUST NOT létrehozni. Ha a fájl megvan, de az olvasása sikertelen, a művelet MUST sikertelen lenni, és a rendszer MUST NOT alapértelmezést írni helyette.
+
+#### Scenario: Az előző fájl nincs a mappában
+- **WHEN** a `SZÁMLÁK2025.xlsx` nincs a mappában, és a 2026-os fájl létrejön
+- **THEN** a rendszer nem foglalja le és nem hozza létre az előző fájlt, és az alapértelmezést használja
+
+#### Scenario: Az előző fájl nem tölthető le
+- **WHEN** a `SZÁMLÁK2025.xlsx` a mappában van, és a letöltése a további próbák után is sikertelen
+- **THEN** a művelet sikertelen, és alapértelmezett `Paraméterek` lap nem készül
