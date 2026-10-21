@@ -38,7 +38,7 @@ public class NavInvoiceQueryTests
         Assert.Equal("ONLINE_SERVICE", options.Software.SoftwareOperation);
         Assert.Equal("1.0", options.Software.SoftwareMainVersion);
         Assert.Equal("OSP", options.Software.SoftwareDevName);
-        Assert.Equal("info@nexande.ocm", options.Software.SoftwareDevContact);
+        Assert.Equal("info@nexande.com", options.Software.SoftwareDevContact);
         Assert.Equal("", options.Login);
         Assert.Equal("", options.TaxNumber);
         Assert.Equal("", options.Password);
