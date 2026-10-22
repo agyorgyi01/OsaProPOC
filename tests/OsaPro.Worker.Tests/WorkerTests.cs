@@ -99,7 +99,7 @@ public class WorkerTests
                 """
                 {
                   "Secrets": {
-                    "ExcelFile": "user-secret-value"
+                    "Excel": "user-secret-value"
                   }
                 }
                 """);
@@ -112,7 +112,7 @@ public class WorkerTests
                     userSecretsId: "osapro-worker-test-secrets");
                 var configuration = host.Services.GetRequiredService<IConfiguration>();
 
-                Assert.Equal("user-secret-value", configuration["Secrets:ExcelFile"]);
+                Assert.Equal("user-secret-value", configuration["Secrets:Excel"]);
             }
             Assert.DoesNotContain("user-secret-value", File.ReadAllText(Path.Combine(contentRoot.FullName, "appsettings.json")), StringComparison.Ordinal);
             Assert.DoesNotContain(

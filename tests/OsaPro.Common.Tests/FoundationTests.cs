@@ -34,11 +34,11 @@ public class FoundationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Secrets:ExcelFile"] = "valami.xls"
+                ["Secrets:Excel"] = "valami.xls"
             })
             .Build();
 
-        Assert.True(SecretConfiguration.IsSecretKey(configuration, "ExcelFile"));
+        Assert.True(SecretConfiguration.IsSecretKey(configuration, "Excel"));
         Assert.DoesNotContain("valami.xls", ReadVersionedAppSettings(), StringComparison.Ordinal);
     }
 
@@ -61,18 +61,18 @@ public class FoundationTests
     public void Environment_variable_maps_to_secret_key()
     {
         var contentRoot = CreateContentRoot("""{ "Secrets": {} }""");
-        Environment.SetEnvironmentVariable("Secrets__ExcelFile", "env-secret");
+        Environment.SetEnvironmentVariable("Secrets__Excel", "env-secret");
         try
         {
             var configuration = Build(contentRoot, includeUserSecrets: false, userSecretsId: null);
 
-            Assert.Equal("env-secret", configuration["Secrets:ExcelFile"]);
-            Assert.True(SecretConfiguration.IsSecretKey(configuration, "ExcelFile"));
+            Assert.Equal("env-secret", configuration["Secrets:Excel"]);
+            Assert.True(SecretConfiguration.IsSecretKey(configuration, "Excel"));
             Assert.DoesNotContain("env-secret", ReadVersionedAppSettings(), StringComparison.Ordinal);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("Secrets__ExcelFile", null);
+            Environment.SetEnvironmentVariable("Secrets__Excel", null);
         }
     }
 
@@ -82,7 +82,7 @@ public class FoundationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Secrets:ExcelFile"] = "valami.xls",
+                ["Secrets:Excel"] = "valami.xls",
                 ["Secrets:Empty"] = ""
             })
             .Build();
@@ -91,9 +91,9 @@ public class FoundationTests
         logger.LogInformation("nem nyitható meg a {Path} fájl", "valami.xls");
 
         var entry = logger.Entries.Single();
-        Assert.Equal("nem nyitható meg a ##ExcelFile## fájl", entry.Message);
+        Assert.Equal("nem nyitható meg a ##Excel## fájl", entry.Message);
         Assert.DoesNotContain("valami.xls", entry.Message, StringComparison.Ordinal);
-        Assert.Contains(entry.State, pair => pair.Value is "##ExcelFile##");
+        Assert.Contains(entry.State, pair => pair.Value is "##Excel##");
         Assert.DoesNotContain(entry.State, pair => pair.Value is string text && text.Contains("valami.xls", StringComparison.Ordinal));
         Assert.Equal("abc", SecretMasker.FromConfiguration(configuration).Mask("abc"));
         Assert.Equal("VALAMI.XLS", SecretMasker.FromConfiguration(configuration).Mask("VALAMI.XLS"));
@@ -105,7 +105,7 @@ public class FoundationTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["Secrets:ExcelFile"] = "valami.xls"
+                ["Secrets:Excel"] = "valami.xls"
             })
             .Build();
         var logger = CreateLogger(configuration);
@@ -113,7 +113,7 @@ public class FoundationTests
         logger.LogError(new InvalidOperationException("nem nyitható meg a valami.xls fájl"), "hiba");
 
         var entry = logger.Entries.Single();
-        Assert.Contains("##ExcelFile##", entry.ExceptionText, StringComparison.Ordinal);
+        Assert.Contains("##Excel##", entry.ExceptionText, StringComparison.Ordinal);
         Assert.DoesNotContain("valami.xls", entry.ExceptionText, StringComparison.Ordinal);
     }
 

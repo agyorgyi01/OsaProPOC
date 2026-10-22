@@ -35,5 +35,5 @@ A rendszer MUST a `Secrets` konfigurációs szakasz kulcsait titkos konfiguráci
 - **THEN** a host titkos kulcs nélkül indul
 
 #### Scenario: Megnevezett kulcs
-- **WHEN** a `Secrets` szakasz tartalmazza az `ExcelFile` kulcsnevet
-- **THEN** az `ExcelFile` titkos konfigurációs kulcs, és az értéke nincs verziókezelt fájlban
+- **WHEN** a `Secrets` szakasz tartalmazza az `Excel` kulcsnevet
+- **THEN** az `Excel` titkos konfigurációs kulcs, és az értéke nincs verziókezelt fájlban

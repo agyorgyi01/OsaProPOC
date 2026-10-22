@@ -47,8 +47,8 @@ A számlafeldolgozás és az értesítés-összeállítás MUST teszttel és hel
 A rendszer MUST a titkos konfigurációs kulcs aktuális értékét a naplóban a `##KulcsNeve##` formára cserélni. A nyers érték MUST nem maradhat a naplóbejegyzésben.
 
 #### Scenario: Érték egy mondatban
-- **WHEN** a `Secrets` szakasz `ExcelFile` kulcsának aktuális értéke `valami.xls`, és a naplószöveg `nem nyitható meg a valami.xls fájl`
-- **THEN** a naplóbejegyzés `nem nyitható meg a ##ExcelFile## fájl`, és a `valami.xls` szöveg nem szerepel benne
+- **WHEN** a `Secrets` szakasz `Excel` kulcsának aktuális értéke `valami.xls`, és a naplószöveg `nem nyitható meg a valami.xls fájl`
+- **THEN** a naplóbejegyzés `nem nyitható meg a ##Excel## fájl`, és a `valami.xls` szöveg nem szerepel benne
 
 ### Requirement: Slack-küldés elkülöníthető azonosítója
 A naplózás MUST a Slack-üzenetek küldéséhez önálló, a másik két Functiontól elkülöníthető azonosítót adni.
