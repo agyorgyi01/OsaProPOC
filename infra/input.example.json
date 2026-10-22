@@ -2,11 +2,10 @@
   "tenantId": "<tenant-id>",
   "subscriptionId": "<subscription-id>",
   "location": "westeurope",
-  "environment": "dev",
   "sharePoint": {
-    "siteHost": "<sharepoint-host>",
-    "sitePath": "/sites/<site>",
-    "folderPath": "<folder>"
+    "siteHost": "gulyasep.sharepoint.com",
+    "sitePath": "/sites/GulyasepSharepoint",
+    "folderPath": "OsaPro.Test"
   },
   "excel": {
     "retryCount": 3,

@@ -5,20 +5,23 @@
     PowerShell 7, Azure CLI és Bicep szükséges. A titokértékek nem kerülnek a kimenetre.
     A parancsok leírása: infra/HASZNALAT.md
 .EXAMPLE
-    ./Invoke-OsaProInfrastructure.ps1 -Action Create -InputPath input.json -InventoryPath inventory.json
+    ./Invoke-OsaProInfrastructure.ps1 -Action Create -Environment dev -InputPath input.json -InventoryPath inventory.json
 .EXAMPLE
-    ./Invoke-OsaProInfrastructure.ps1 -Action Verify -InputPath input.json -InventoryPath inventory.json
+    ./Invoke-OsaProInfrastructure.ps1 -Action Verify -Environment dev -InputPath input.json -InventoryPath inventory.json
 .EXAMPLE
-    ./Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -InputPath input.json -InventoryPath inventory.json
+    ./Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -Environment dev -InputPath input.json -InventoryPath inventory.json
 .EXAMPLE
-    ./Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -Confirm -InputPath input.json -InventoryPath inventory.json
+    ./Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -Environment dev -Confirm -InputPath input.json -InventoryPath inventory.json
 .EXAMPLE
-    ./Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target Shared -Confirm -InputPath input.json -InventoryPath inventory.json
+    ./Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target Shared -Environment dev -Confirm -InputPath input.json -InventoryPath inventory.json
 #>
 param(
     [Parameter(Mandatory = $true)]
     [ValidateSet('Create', 'Verify', 'Destroy')]
     [string] $Action,
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('dev', 'prod')]
+    [string] $Environment,
     [Parameter(Mandatory = $true)]
     [string] $InputPath,
     [Parameter(Mandatory = $true)]
@@ -68,13 +71,24 @@ function ConvertTo-HashtableRecursive {
 }
 
 $inputObject = ConvertTo-HashtableRecursive (Get-Content -Raw -Path $InputPath | ConvertFrom-Json)
+$inputObject.environment = $Environment
 if (Test-Path -LiteralPath $InventoryPath) {
     $inventory = ConvertTo-HashtableRecursive (Get-Content -Raw -Path $InventoryPath | ConvertFrom-Json)
     $inventory.resources = @($inventory.resources)
     $inventory.secretLocations = @($inventory.secretLocations)
+    $recorded = ''
+    if ($inventory.Contains('environment') -and $null -ne $inventory.environment) {
+        $recorded = [string]$inventory.environment
+    }
+    if ([string]::IsNullOrWhiteSpace($recorded)) {
+        $inventory.environment = $Environment
+    }
+    elseif ($recorded -ne $Environment) {
+        throw "A leltár környezete $recorded, a paraméter $Environment."
+    }
 }
 else {
-    $inventory = New-OsaProInventory -Environment ([string]$inputObject.environment)
+    $inventory = New-OsaProInventory -Environment $Environment
 }
 
 $template = Join-Path (Split-Path -Parent $scriptDir) 'bicep\main.bicep'

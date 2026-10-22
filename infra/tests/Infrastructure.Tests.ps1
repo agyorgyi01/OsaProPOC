@@ -199,11 +199,11 @@ else {
 $helper.Dispose()
 $docText = Get-Content -Raw -Encoding UTF8 (Join-Path $PSScriptRoot '..\HASZNALAT.md')
 $commands = @(
-    './Invoke-OsaProInfrastructure.ps1 -Action Create -InputPath input.json -InventoryPath inventory.json'
-    './Invoke-OsaProInfrastructure.ps1 -Action Verify -InputPath input.json -InventoryPath inventory.json'
-    './Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -InputPath input.json -InventoryPath inventory.json'
-    './Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -Confirm -InputPath input.json -InventoryPath inventory.json'
-    './Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target Shared -Confirm -InputPath input.json -InventoryPath inventory.json'
+    './Invoke-OsaProInfrastructure.ps1 -Action Create -Environment dev -InputPath input.json -InventoryPath inventory.json'
+    './Invoke-OsaProInfrastructure.ps1 -Action Verify -Environment dev -InputPath input.json -InventoryPath inventory.json'
+    './Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -Environment dev -InputPath input.json -InventoryPath inventory.json'
+    './Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target OsaPro -Environment dev -Confirm -InputPath input.json -InventoryPath inventory.json'
+    './Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target Shared -Environment dev -Confirm -InputPath input.json -InventoryPath inventory.json'
 )
 $commandsFound = $true
 foreach ($command in $commands) {
