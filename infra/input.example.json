@@ -2,32 +2,5 @@
   "tenantId": "<tenant-id>",
   "subscriptionId": "<subscription-id>",
   "location": "westeurope",
-  "sharePoint": {
-    "siteHost": "gulyasep.sharepoint.com",
-    "sitePath": "/sites/GulyasepSharepoint",
-    "folderPath": "OsaPro.Test"
-  },
-  "excel": {
-    "retryCount": 3,
-    "retryDelaySeconds": 5
-  },
-  "nav": {
-    "baseUrl": "https://api.onlineszamla.nav.gov.hu",
-    "retryCount": 3,
-    "retryDelaySeconds": 5,
-    "software": {
-      "softwareId": "HU-OSP-00000000001",
-      "softwareName": "OsaPro",
-      "softwareOperation": "ONLINE_SERVICE",
-      "softwareMainVersion": "1.0",
-      "softwareDevName": "OSP",
-      "softwareDevContact": "info@nexande.com"
-    }
-  },
-  "secretVariables": {
-    "NavLogin": "OSP_NAV_LOGIN",
-    "NavTaxNumber": "OSP_NAV_TAXNUMBER",
-    "NavPassword": "OSP_NAV_PASSWORD",
-    "NavSigningKey": "OSP_NAV_SIGNINGKEY"
-  }
+  "prefix": "osp"
 }

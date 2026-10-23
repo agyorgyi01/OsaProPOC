@@ -1,6 +1,6 @@
 ﻿Set-StrictMode -Version 2.0
 
-Import-Module (Join-Path $PSScriptRoot 'Inventory.psm1') -Force
+Import-Module (Join-Path $PSScriptRoot 'Inventory.psm1') -Force -Global
 
 $script:AzureKeys = @(
     'osapro-rg', 'osapro-func', 'osapro-storage', 'notification-storage',
@@ -17,6 +17,16 @@ $script:OutputMap = @{
     slackStorageId = 'slack-storage'
     appInsightsId = 'app-insights'
     workspaceId = 'workspace'
+}
+
+function Get-OsaProDefinition {
+    param([string] $Key)
+    foreach ($item in (Get-OsaProCatalog)) {
+        if ([string]$item.Key -eq $Key) {
+            return $item
+        }
+    }
+    return $null
 }
 
 function New-OsaProResult {
@@ -53,6 +63,27 @@ function Get-OsaProInputValue {
     return $Default
 }
 
+function Test-OsaProGuid {
+    param([string] $Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $false
+    }
+    return $Value -match '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+}
+
+function Assert-OsaProTargetInput {
+    param($InputObject)
+    $tenantId = [string](Get-OsaProInputValue $InputObject 'tenantId')
+    $subscriptionId = [string](Get-OsaProInputValue $InputObject 'subscriptionId')
+    if (-not (Test-OsaProGuid $tenantId) -or -not (Test-OsaProGuid $subscriptionId)) {
+        throw 'A bérlő és az előfizetés azonosítója kötelező, a szkript nem olvassa a bejelentkezett fiókot.'
+    }
+    $prefix = [string](Get-OsaProInputValue $InputObject 'prefix')
+    if (-not [regex]::IsMatch($prefix, '^[a-z][a-z0-9]{0,12}$')) {
+        throw 'Az előtag kisbetűvel kezdődik, csak kisbetű és szám lehet, legfeljebb 13 karakter.'
+    }
+}
+
 function Add-SettingIfPresent {
     param($Settings, [string] $Name, $Value)
     if ($null -eq $Value) {
@@ -66,55 +97,33 @@ function Add-SettingIfPresent {
 }
 
 function Get-OsaProAppSettings {
-    param($InputObject, $Names, $ExcelAppId, [string] $ExcelSecret, $EnvironmentVariables, [bool] $IncludeExcelSecret)
+    param($ExcelAppId, [string] $ExcelSecret, [bool] $IncludeExcelSecret)
     $settings = @{}
-    $sharePoint = Get-OsaProInputValue -InputObject $InputObject -Name 'sharePoint'
-    $nav = Get-OsaProInputValue -InputObject $InputObject -Name 'nav'
-    $excel = Get-OsaProInputValue -InputObject $InputObject -Name 'excel'
-    $software = Get-OsaProInputValue -InputObject $nav -Name 'software'
-
-    Add-SettingIfPresent $settings 'Excel__SiteHost' (Get-OsaProInputValue $sharePoint 'siteHost')
-    Add-SettingIfPresent $settings 'Excel__SitePath' (Get-OsaProInputValue $sharePoint 'sitePath')
-    Add-SettingIfPresent $settings 'Excel__FolderPath' (Get-OsaProInputValue $sharePoint 'folderPath')
-    Add-SettingIfPresent $settings 'Excel__RetryCount' (Get-OsaProInputValue $excel 'retryCount')
-    Add-SettingIfPresent $settings 'Excel__RetryDelaySeconds' (Get-OsaProInputValue $excel 'retryDelaySeconds')
-
-    Add-SettingIfPresent $settings 'Nav__BaseUrl' (Get-OsaProInputValue $nav 'baseUrl')
-    Add-SettingIfPresent $settings 'Nav__RetryCount' (Get-OsaProInputValue $nav 'retryCount')
-    Add-SettingIfPresent $settings 'Nav__RetryDelaySeconds' (Get-OsaProInputValue $nav 'retryDelaySeconds')
-    foreach ($softwareKey in @('softwareId', 'softwareName', 'softwareOperation', 'softwareMainVersion', 'softwareDevName', 'softwareDevContact')) {
-        $suffix = $softwareKey.Substring(0, 1).ToUpperInvariant() + $softwareKey.Substring(1)
-        Add-SettingIfPresent $settings "Nav__Software__$suffix" (Get-OsaProInputValue $software $softwareKey)
-    }
-
     if ($IncludeExcelSecret) {
-        Add-SettingIfPresent $settings 'Secrets__ExcelTenantId' (Get-OsaProInputValue $InputObject 'tenantId')
         Add-SettingIfPresent $settings 'Secrets__ExcelClientId' $ExcelAppId
         Add-SettingIfPresent $settings 'Secrets__ExcelClientSecret' $ExcelSecret
-    }
-
-    $variables = Get-OsaProInputValue -InputObject $InputObject -Name 'secretVariables'
-    foreach ($secretKey in @('NavLogin', 'NavTaxNumber', 'NavPassword', 'NavSigningKey')) {
-        $variableName = [string](Get-OsaProInputValue $variables $secretKey)
-        if ([string]::IsNullOrWhiteSpace($variableName)) {
-            continue
-        }
-        $value = $null
-        if ($EnvironmentVariables -and $EnvironmentVariables.Contains($variableName)) {
-            $value = $EnvironmentVariables[$variableName]
-        }
-        Add-SettingIfPresent $settings "Secrets__$secretKey" $value
     }
 
     return $settings
 }
 
 function Invoke-OsaProCreate {
-    param($InputObject, $Inventory, $Gateway, $Result, $EnvironmentVariables, $Save)
+    param($InputObject, $Inventory, $Gateway, $Result, $Save)
 
     $environment = [string](Get-OsaProInputValue $InputObject 'environment')
+    $prefix = [string](Get-OsaProInputValue $InputObject 'prefix')
+    $recordedPrefix = ''
+    if ($Inventory -is [System.Collections.IDictionary] -and $Inventory.Contains('prefix') -and $null -ne $Inventory['prefix']) {
+        $recordedPrefix = [string]$Inventory['prefix']
+    }
+    if ([string]::IsNullOrWhiteSpace($recordedPrefix)) {
+        $Inventory.prefix = $prefix
+    }
+    elseif ($recordedPrefix -ne $prefix) {
+        throw "A leltár előtagja $recordedPrefix, a bemenet $prefix."
+    }
     try {
-        $names = Get-OsaProResourceNames -Environment $environment
+        $names = Get-OsaProResourceNames -Environment $environment -Prefix $prefix
     }
     catch {
         Add-OsaProLog $Result $_.Exception.Message
@@ -126,24 +135,44 @@ function Invoke-OsaProCreate {
         $Inventory.environment = $environment
     }
 
+    $subscriptionId = [string](Get-OsaProInputValue $InputObject 'subscriptionId')
     foreach ($key in $script:AzureKeys) {
-        $definition = Get-OsaProCatalog | Where-Object { $_.Key -eq $key } | Select-Object -First 1
+        $definition = Get-OsaProDefinition $key
         $name = [string]$names[$definition.NameProperty]
+        $expectedGroup = $names.OsaProResourceGroup
+        if ($key -in @('shared-rg', 'slack-func', 'slack-storage', 'app-insights', 'workspace')) {
+            $expectedGroup = $names.SharedResourceGroup
+        }
         $live = & $Gateway.FindByName $definition.Type $name
         $liveId = ''
         if ($live) {
             $liveId = [string]$live.id
         }
-        $claim = Test-OsaProNameClaim -Inventory $Inventory -Name $name -LiveId $liveId
+        $claim = Test-OsaProNameClaim -Inventory $Inventory -Name $name -LiveId $liveId -SubscriptionId $subscriptionId -ExpectedResourceGroup $expectedGroup
         if ($claim -eq 'foreign') {
             Add-OsaProLog $Result "Foglalt idegen név, a lépés megáll: $name"
             $Result.Status = 'partial'
             return
         }
+        if ($claim -eq 'owned' -and -not (Get-OsaProResource -Inventory $Inventory -Key $key)) {
+            Add-OsaProLog $Result "Meglévő erőforrás, nem jön létre újra: $name"
+        }
     }
 
     try {
-        $deployed = & $Gateway.Deploy $environment ([string](Get-OsaProInputValue $InputObject 'location'))
+        foreach ($storageKey in @('osapro-storage', 'slack-storage', 'notification-storage')) {
+            $storageDefinition = Get-OsaProDefinition $storageKey
+            $storageName = [string]$names[$storageDefinition.NameProperty]
+            $storageLive = & $Gateway.FindByName $storageDefinition.Type $storageName
+            if ($storageLive) {
+                continue
+            }
+            $available = & $Gateway.CheckStorageName $storageName
+            if (-not $available) {
+                throw "A $storageName storage-név a megadott előfizetésen kívül foglalt. A meglévő erőforrás nem jön létre újra."
+            }
+        }
+        $deployed = & $Gateway.Deploy $environment ([string](Get-OsaProInputValue $InputObject 'location')) $prefix
         foreach ($outputName in $script:OutputMap.Keys) {
             if (-not $deployed.Contains($outputName) -or [string]::IsNullOrWhiteSpace([string]$deployed[$outputName])) {
                 throw "A telepítés nem adott azonosítót: $outputName"
@@ -205,11 +234,10 @@ function Invoke-OsaProCreate {
         }
         if (-not $hasSecret) {
             $secret = [string](& $Gateway.AddPassword $excel.id)
-            $settings = Get-OsaProAppSettings -InputObject $InputObject -Names $names -ExcelAppId $appId -ExcelSecret $secret -EnvironmentVariables $EnvironmentVariables -IncludeExcelSecret $true
+            $settings = Get-OsaProAppSettings -ExcelAppId $appId -ExcelSecret $secret -IncludeExcelSecret $true
             $functionApp = Get-OsaProResource -Inventory $Inventory -Key 'osapro-func'
             & $Gateway.SetAppSettings $functionApp.id $settings
             foreach ($pair in @(
-                @{ key = 'Secrets:ExcelTenantId'; location = 'Secrets__ExcelTenantId' }
                 @{ key = 'Secrets:ExcelClientId'; location = 'Secrets__ExcelClientId' }
                 @{ key = 'Secrets:ExcelClientSecret'; location = 'Secrets__ExcelClientSecret' }
             )) {
@@ -222,28 +250,8 @@ function Invoke-OsaProCreate {
             Add-OsaProLog $Result 'Az Excel-titok a Function App környezetbe került.' $secret
         }
         else {
-            $settings = Get-OsaProAppSettings -InputObject $InputObject -Names $names -ExcelAppId $appId -ExcelSecret '' -EnvironmentVariables $EnvironmentVariables -IncludeExcelSecret $false
-            $functionApp = Get-OsaProResource -Inventory $Inventory -Key 'osapro-func'
-            & $Gateway.SetAppSettings $functionApp.id $settings
             Add-OsaProLog $Result 'A meglévő Excel-titok nem cserélődik.'
         }
-    }
-    catch {
-        Add-OsaProLog $Result $_.Exception.Message
-        $Result.Status = 'partial'
-        return
-    }
-
-    $sharePoint = Get-OsaProInputValue $InputObject 'sharePoint'
-    try {
-        $folderId = [string](& $Gateway.EnsureFolder (Get-OsaProInputValue $sharePoint 'siteHost') (Get-OsaProInputValue $sharePoint 'sitePath') (Get-OsaProInputValue $sharePoint 'folderPath'))
-        $folder = Get-OsaProResource -Inventory $Inventory -Key 'sharepoint-folder'
-        if (-not $folder) {
-            $created = Add-OsaProInventoryResource -Inventory $Inventory -Key 'sharepoint-folder' -Id $folderId
-            $created.name = [string](Get-OsaProInputValue $sharePoint 'folderPath')
-        }
-        if ($Save) { & $Save }
-        Add-OsaProLog $Result 'A konfigurált SharePoint-mappa megvan.'
     }
     catch {
         Add-OsaProLog $Result $_.Exception.Message
@@ -348,13 +356,13 @@ function Invoke-OsaProInfrastructure {
         [ValidateSet('OsaPro', 'Shared')]
         [string] $Target = 'OsaPro',
         [switch] $Approved,
-        $EnvironmentVariables = @{},
         $Save
     )
 
+    Assert-OsaProTargetInput $InputObject
     $result = New-OsaProResult -Status 'partial'
     if ($Action -eq 'Create') {
-        Invoke-OsaProCreate -InputObject $InputObject -Inventory $Inventory -Gateway $Gateway -Result $result -EnvironmentVariables $EnvironmentVariables -Save $Save
+        Invoke-OsaProCreate -InputObject $InputObject -Inventory $Inventory -Gateway $Gateway -Result $result -Save $Save
     }
     elseif ($Action -eq 'Verify') {
         Invoke-OsaProVerify -Inventory $Inventory -Gateway $Gateway -Result $result
@@ -366,4 +374,4 @@ function Invoke-OsaProInfrastructure {
     return $result
 }
 
-Export-ModuleMember -Function 'Invoke-OsaProInfrastructure', 'Get-OsaProAppSettings'
+Export-ModuleMember -Function 'Invoke-OsaProInfrastructure', 'Get-OsaProAppSettings', 'Get-OsaProInputValue', 'Test-OsaProGuid', 'Assert-OsaProTargetInput'

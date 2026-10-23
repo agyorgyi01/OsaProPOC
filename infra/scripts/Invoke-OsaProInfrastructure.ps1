@@ -39,9 +39,9 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 }
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Import-Module (Join-Path $scriptDir 'Inventory.psm1') -Force
 Import-Module (Join-Path $scriptDir 'Provision.psm1') -Force
 Import-Module (Join-Path $scriptDir 'AzureGateway.psm1') -Force
+Import-Module (Join-Path $scriptDir 'Inventory.psm1') -Force
 
 function ConvertTo-HashtableRecursive {
     param($Value)
@@ -72,6 +72,8 @@ function ConvertTo-HashtableRecursive {
 
 $inputObject = ConvertTo-HashtableRecursive (Get-Content -Raw -Path $InputPath | ConvertFrom-Json)
 $inputObject.environment = $Environment
+Assert-OsaProTargetInput $inputObject
+$prefix = [string](Get-OsaProInputValue $inputObject 'prefix')
 if (Test-Path -LiteralPath $InventoryPath) {
     $inventory = ConvertTo-HashtableRecursive (Get-Content -Raw -Path $InventoryPath | ConvertFrom-Json)
     $inventory.resources = @($inventory.resources)
@@ -86,17 +88,24 @@ if (Test-Path -LiteralPath $InventoryPath) {
     elseif ($recorded -ne $Environment) {
         throw "A leltár környezete $recorded, a paraméter $Environment."
     }
+    $recordedPrefix = ''
+    if ($inventory.Contains('prefix') -and $null -ne $inventory.prefix) {
+        $recordedPrefix = [string]$inventory.prefix
+    }
+    if ([string]::IsNullOrWhiteSpace($recordedPrefix)) {
+        $inventory.prefix = $prefix
+    }
+    elseif ($recordedPrefix -ne $prefix) {
+        throw "A leltár előtagja $recordedPrefix, a bemenet $prefix."
+    }
 }
 else {
-    $inventory = New-OsaProInventory -Environment $Environment
+    $inventory = New-OsaProInventory -Environment $Environment -Prefix $prefix
 }
 
 $template = Join-Path (Split-Path -Parent $scriptDir) 'bicep\main.bicep'
-$gateway = New-OsaProAzureGateway -TemplatePath $template
-$variables = @{}
-foreach ($entry in [Environment]::GetEnvironmentVariables().GetEnumerator()) {
-    $variables[$entry.Key] = [string]$entry.Value
-}
+$gateway = New-OsaProAzureGateway -TemplatePath $template -TenantId ([string](Get-OsaProInputValue $inputObject 'tenantId')) -SubscriptionId ([string](Get-OsaProInputValue $inputObject 'subscriptionId'))
+Connect-OsaProAccount
 
 $save = {
     $clean = Protect-OsaProInventory -Inventory $inventory
@@ -104,7 +113,7 @@ $save = {
     Set-Content -LiteralPath $InventoryPath -Value $json -Encoding utf8
 }
 
-$result = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $inventory -Gateway $gateway -Action $Action -Target $Target -Approved:([bool]$Confirm) -EnvironmentVariables $variables -Save $save
+$result = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $inventory -Gateway $gateway -Action $Action -Target $Target -Approved:([bool]$Confirm) -Save $save
 & $save
 
 foreach ($line in @($result.Log)) {

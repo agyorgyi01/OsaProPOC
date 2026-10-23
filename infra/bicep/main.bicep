@@ -1,6 +1,6 @@
 targetScope = 'subscription'
 
-@description('dev vagy prod. A nevek ebből és az osp előtagból képződnek.')
+@description('dev vagy prod.')
 @allowed([
   'dev'
   'prod'
@@ -10,15 +10,20 @@ param environment string
 @description('Azure-régió mindkét erőforráscsoportnak.')
 param location string
 
-var osaproResourceGroupName = 'osp-${environment}-rg'
-var sharedResourceGroupName = 'osp-${environment}-shared-rg'
-var osaproFunctionAppName = 'osp-${environment}-func'
-var slackFunctionAppName = 'osp-${environment}-slack'
-var appInsightsName = 'osp-${environment}-ai'
-var workspaceName = 'osp-${environment}-log'
-var osaproStorageName = 'osp${environment}st'
-var slackStorageName = 'osp${environment}slackst'
-var notificationStorageName = 'osp${environment}tbl'
+@description('Név előtag. Kisbetűvel kezdődik, csak kisbetű és szám, legfeljebb 13 karakter. A karakterkészletet a szkript ellenőrzi.')
+@minLength(1)
+@maxLength(13)
+param prefix string
+
+var osaproResourceGroupName = '${prefix}-${environment}-rg'
+var sharedResourceGroupName = '${prefix}-${environment}-shared-rg'
+var osaproFunctionAppName = '${prefix}-${environment}-func'
+var slackFunctionAppName = '${prefix}-${environment}-slack'
+var appInsightsName = '${prefix}-${environment}-ai'
+var workspaceName = '${prefix}-${environment}-log'
+var osaproStorageName = '${prefix}${environment}st'
+var slackStorageName = '${prefix}${environment}slackst'
+var notificationStorageName = '${prefix}${environment}tbl'
 
 resource osaproRg 'Microsoft.Resources/resourceGroups@2024-03-01' = {
   name: osaproResourceGroupName

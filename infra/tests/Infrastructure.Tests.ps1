@@ -21,15 +21,20 @@ function Assert-True {
     }
 }
 
-$dev = Get-OsaProResourceNames -Environment 'dev'
-$prod = Get-OsaProResourceNames -Environment 'prod'
+$dev = Get-OsaProResourceNames -Environment 'dev' -Prefix 'osp'
+$prod = Get-OsaProResourceNames -Environment 'prod' -Prefix 'osp'
 Assert-True ($dev.OsaProResourceGroup -eq 'osp-dev-rg' -and $dev.OsaProStorage -eq 'ospdevst') 'dev nevek'
 Assert-True ($prod.OsaProResourceGroup -eq 'osp-prod-rg' -and $prod.OsaProStorage -eq 'ospprodst') 'prod nevek'
+$custom = Get-OsaProResourceNames -Environment 'dev' -Prefix 'ab'
+Assert-True ($custom.OsaProResourceGroup -eq 'ab-dev-rg' -and $custom.OsaProStorage -eq 'abdevst' -and $custom.SlackStorage -eq 'abdevslackst') 'elotag a nevben'
 $invalidStopped = $false
-try { Get-OsaProResourceNames -Environment 'test' | Out-Null } catch { $invalidStopped = $true }
+try { Get-OsaProResourceNames -Environment 'test' -Prefix 'osp' | Out-Null } catch { $invalidStopped = $true }
 Assert-True $invalidStopped 'ervenytelen kornyezet megall'
+$invalidPrefix = $false
+try { Get-OsaProResourceNames -Environment 'dev' -Prefix 'OSP' | Out-Null } catch { $invalidPrefix = $true }
+Assert-True $invalidPrefix 'ervenytelen elotag megall'
 
-$inventory = New-OsaProInventory -Environment 'dev'
+$inventory = New-OsaProInventory -Environment 'dev' -Prefix 'osp'
 $first = Add-OsaProInventoryResource -Inventory $inventory -Key 'osapro-rg' -Id '/id/osapro-rg'
 $second = Add-OsaProInventoryResource -Inventory $inventory -Key 'osapro-rg' -Id '/id/osapro-rg'
 Assert-True (@($inventory.resources).Count -eq 1 -and $first.id -eq $second.id) 'masodik futas ugyanaz az azonosito'
@@ -37,9 +42,12 @@ Assert-True (@($inventory.resources).Count -eq 1 -and $first.id -eq $second.id) 
 $foreignInventory = New-OsaProInventory -Environment 'dev'
 $claim = Test-OsaProNameClaim -Inventory $foreignInventory -Name 'osp-dev-rg' -LiveId '/subscriptions/other/resourceGroups/osp-dev-rg'
 Assert-True ($claim -eq 'foreign' -and @($foreignInventory.resources).Count -eq 0) 'idegen nev nincs a leltarban'
+$sameSubscription = '11111111-2222-3333-4444-555555555555'
+$inPlace = Test-OsaProNameClaim -Inventory (New-OsaProInventory -Environment 'dev') -Name 'ospdevtbl' -LiveId "/subscriptions/$sameSubscription/resourceGroups/osp-dev-rg/providers/Microsoft.Storage/storageAccounts/ospdevtbl" -SubscriptionId $sameSubscription -ExpectedResourceGroup 'osp-dev-rg'
+Assert-True ($inPlace -eq 'owned') 'meglevo eroforras nem idegen'
 
 $secretValue = 'super-secret-value'
-$dirty = New-OsaProInventory -Environment 'dev'
+$dirty = New-OsaProInventory -Environment 'dev' -Prefix 'osp'
 Add-OsaProInventoryResource -Inventory $dirty -Key 'osapro-func' -Id '/id/osapro-func' | Out-Null
 $dirty.resources[0].clientSecret = $secretValue
 $dirty.secretLocations = @(@{ key = 'Secrets:ExcelClientSecret'; location = 'Secrets__ExcelClientSecret'; value = $secretValue })
@@ -62,7 +70,7 @@ $bicep = Get-Content -Raw (Join-Path $PSScriptRoot '..\bicep\main.bicep')
 $osaproBicep = Get-Content -Raw (Join-Path $PSScriptRoot '..\bicep\osapro.bicep')
 $sharedBicep = Get-Content -Raw (Join-Path $PSScriptRoot '..\bicep\shared.bicep')
 $allBicep = $bicep + $osaproBicep + $sharedBicep
-Assert-True ($bicep -match "osp-\$\{environment\}-rg" -and $bicep -match 'osp\$\{environment\}st') 'bicep nevkepzes'
+Assert-True ($bicep -like '*${prefix}-${environment}-rg*' -and $bicep -like '*${prefix}${environment}st*' -and $bicep -match 'param prefix string') 'bicep nevkepzes'
 Assert-True ($allBicep -notmatch 'alwaysReady') 'nincs always-ready'
 Assert-True (@([regex]::Matches($bicep, "Microsoft.Resources/resourceGroups")).Count -eq 2) 'ket eroforrascsoport'
 $outputNames = @([regex]::Matches($bicep, '(?m)^output\s+(\S+)')) | ForEach-Object { $_.Groups[1].Value }
@@ -77,8 +85,10 @@ function New-TestGateway {
         Names = New-Object System.Collections.Generic.List[string]
         Settings = @()
         Foreign = $false
-        FailFolder = $false
+        FailConsent = $false
         Hits = 0
+        DeployCalls = 0
+        StorageNameTaken = $false
         ForeignDuring = $false
         Live = @{}
     }
@@ -105,8 +115,13 @@ function New-TestGateway {
             return $null
         }.GetNewClosure()
         Deploy = {
-            param($Environment, $Location)
+            param($Environment, $Location, $Prefix)
+            $state.DeployCalls++
             return $ids
+        }.GetNewClosure()
+        CheckStorageName = {
+            param($Name)
+            return -not [bool]$state.StorageNameTaken
         }.GetNewClosure()
         FindApplication = { param($DisplayName) return $null }.GetNewClosure()
         AddApplication = {
@@ -114,14 +129,9 @@ function New-TestGateway {
             return @{ appObjectId = '/id/excel-app'; appId = 'app-id'; servicePrincipalId = '/id/excel-sp' }
         }.GetNewClosure()
         AddPermissions = { param($AppObjectId) $state.PermissionCalls++ }.GetNewClosure()
-        Consent = { param($ServicePrincipalId) }.GetNewClosure()
+        Consent = { param($ServicePrincipalId) if ($state.FailConsent) { throw 'consent hiba' } }.GetNewClosure()
         AddPassword = { param($AppObjectId) $state.PasswordCalls++; return $secretValue }.GetNewClosure()
         SetAppSettings = { param($FunctionAppId, $Settings) $state.Settings += ,$Settings }.GetNewClosure()
-        EnsureFolder = {
-            param($SiteHost, $SitePath, $FolderPath)
-            if ($state.FailFolder) { throw 'mappa hiba' }
-            return '/id/sharepoint-folder'
-        }.GetNewClosure()
         GetLiveId = {
             param($Resource)
             if ($state.Live.ContainsKey($Resource.key)) { return $state.Live[$Resource.key] }
@@ -133,41 +143,137 @@ function New-TestGateway {
 }
 
 $inputObject = @{
-    tenantId = 'tenant'
+    tenantId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    subscriptionId = '11111111-2222-3333-4444-555555555555'
     location = 'westeurope'
+    prefix = 'osp'
     environment = 'dev'
-    sharePoint = @{ siteHost = 'contoso.sharepoint.com'; sitePath = '/sites/demo'; folderPath = 'OsaPro.Test' }
     excel = @{ retryCount = 3; retryDelaySeconds = 5 }
     nav = @{ baseUrl = 'https://api.onlineszamla.nav.gov.hu'; retryCount = 3; retryDelaySeconds = 5; software = @{ softwareId = 'HU-OSP-00000000001' } }
     secretVariables = @{ NavPassword = 'OSP_NAV_PASSWORD' }
 }
 
+$guardInventory = New-OsaProInventory -Environment 'dev'
+$guardGateway = New-TestGateway
+$guardStopped = $false
+try {
+    Invoke-OsaProInfrastructure -InputObject @{ environment = 'dev'; location = 'westeurope'; tenantId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' } -Inventory $guardInventory -Gateway $guardGateway -Action 'Create' | Out-Null
+}
+catch {
+    $guardStopped = $true
+}
+Assert-True ($guardStopped -and @($guardInventory.resources).Count -eq 0 -and $guardGateway.State.PasswordCalls -eq 0) 'hianyzo elofizetesnel nincs Azure-hivas'
+
+$badPrefixGateway = New-TestGateway
+$badPrefixStopped = $false
+try {
+    Invoke-OsaProInfrastructure -InputObject @{ environment = 'dev'; location = 'westeurope'; tenantId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'; subscriptionId = '11111111-2222-3333-4444-555555555555'; prefix = 'OSP' } -Inventory (New-OsaProInventory -Environment 'dev') -Gateway $badPrefixGateway -Action 'Create' | Out-Null
+}
+catch {
+    $badPrefixStopped = $true
+}
+Assert-True ($badPrefixStopped -and $badPrefixGateway.State.DeployCalls -eq 0) 'ervenytelen elotag nem hiv Azure-t'
+
+$prefixMismatchGateway = New-TestGateway
+$prefixMismatch = $false
+try {
+    Invoke-OsaProInfrastructure -InputObject @{ environment = 'dev'; location = 'westeurope'; tenantId = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'; subscriptionId = '11111111-2222-3333-4444-555555555555'; prefix = 'ab' } -Inventory (New-OsaProInventory -Environment 'dev' -Prefix 'osp') -Gateway $prefixMismatchGateway -Action 'Create' | Out-Null
+}
+catch {
+    $prefixMismatch = $true
+}
+Assert-True ($prefixMismatch -and $prefixMismatchGateway.State.DeployCalls -eq 0) 'eltero leltarelotag megall'
+
+Import-Module (Join-Path $PSScriptRoot '..\scripts\AzureGateway.psm1') -Force
+$header = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"alg":"none"}')).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+$ownPayload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"tid":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"}')).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+$otherPayload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('{"tid":"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"}')).TrimEnd('=').Replace('+', '-').Replace('/', '_')
+$ownTokenAccepted = $false
+try {
+    Assert-OsaProTokenTenant -Token "$header.$ownPayload.sig" -TenantId 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+    $ownTokenAccepted = $true
+}
+catch { $ownTokenAccepted = $false }
+Assert-True $ownTokenAccepted 'a megadott berlo tokenje jo'
+$foreignTokenStopped = $false
+$foreignTokenMessage = ''
+try {
+    Assert-OsaProTokenTenant -Token "$header.$otherPayload.sig" -TenantId 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
+}
+catch {
+    $foreignTokenStopped = $true
+    $foreignTokenMessage = [string]$_.Exception.Message
+}
+Assert-True ($foreignTokenStopped -and $foreignTokenMessage -notlike '*bbbbbbbb*') 'az idegen berlo nem kerul ki'
+$ownArm = $false
+try {
+    Assert-OsaProArmSubscription -ResourceId '/subscriptions/11111111-2222-3333-4444-555555555555/resourceGroups/osp-dev-rg' -SubscriptionId '11111111-2222-3333-4444-555555555555'
+    $ownArm = $true
+}
+catch { $ownArm = $false }
+Assert-True $ownArm 'sajat elofizetes azonositoja jo'
+$foreignArm = $false
+try {
+    Assert-OsaProArmSubscription -ResourceId '/subscriptions/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/resourceGroups/osp-dev-rg' -SubscriptionId '11111111-2222-3333-4444-555555555555'
+}
+catch { $foreignArm = $true }
+Assert-True $foreignArm 'idegen elofizetes azonositoja tilos'
+$gatewayText = Get-Content -Raw -Encoding UTF8 (Join-Path $PSScriptRoot '..\scripts\AzureGateway.psm1')
+Assert-True ($gatewayText -notmatch 'account show' -and $gatewayText -notmatch 'account list' -and $gatewayText -match 'az login' -and $gatewayText -match '--tenant' -and $gatewayText -match '--subscription' -and $gatewayText -notmatch 'conflictBehavior') 'a cel nem a bejelentkezett fiokbol jon'
+Assert-True ($gatewayText -match 'get-access-token[\s\S]{0,220}-SkipSubscription' -or $gatewayText -match '-SkipSubscription[\s\S]{0,80}get-access-token') 'a token csak a berlőt kapja'
+
+
 $createdInventory = New-OsaProInventory -Environment 'dev'
 $gateway = New-TestGateway
-$firstRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $createdInventory -Gateway $gateway -Action 'Create' -EnvironmentVariables @{}
-$secondRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $createdInventory -Gateway $gateway -Action 'Create' -EnvironmentVariables @{}
+$firstRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $createdInventory -Gateway $gateway -Action 'Create'
+$secondRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $createdInventory -Gateway $gateway -Action 'Create'
 $settingsJson = ($gateway.State.Settings | ConvertTo-Json -Depth 6)
 Assert-True ($firstRun.Status -eq 'complete' -and $secondRun.Status -eq 'complete') 'hianyzo NAV titok mellett teljes'
 Assert-True ($gateway.State.PasswordCalls -eq 1 -and $gateway.State.PermissionCalls -eq 1) 'masodik futas nem ker uj titkot es engedelyt'
-Assert-True (($settingsJson -notlike '*OSP_NAV_PASSWORD*') -and ($settingsJson -notlike '*Secrets__NavPassword*')) 'NAV jelszo nem keszul'
+Assert-True (($settingsJson -notlike '*OSP_NAV_PASSWORD*') -and ($settingsJson -notlike '*Secrets__NavPassword*') -and ($settingsJson -notlike '*Nav__*') -and ($settingsJson -notlike '*Excel__*')) 'NAV es Excel beallitas nem masolodik'
 $stored = Protect-OsaProInventory -Inventory $createdInventory | ConvertTo-Json -Depth 6
 $logText = $firstRun.Log -join ' '
 Assert-True (($stored -notlike "*$secretValue*") -and ($logText -notlike "*$secretValue*")) 'excel titok nincs a leltarban es a naploban'
+Assert-True (@($createdInventory.resources | Where-Object { $_.key -eq 'sharepoint-folder' }).Count -eq 0) 'mappa nem keszul'
 
 $partialInventory = New-OsaProInventory -Environment 'dev'
 $partialGateway = New-TestGateway
-$partialGateway.State.FailFolder = $true
-$partial = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $partialInventory -Gateway $partialGateway -Action 'Create' -EnvironmentVariables @{}
+$partialGateway.State.FailConsent = $true
+$partial = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $partialInventory -Gateway $partialGateway -Action 'Create'
 Assert-True ($partial.Status -eq 'partial' -and $partialInventory.status -eq 'partial') 'reszleges futas nem teljes siker'
-$partialGateway.State.FailFolder = $false
-Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $partialInventory -Gateway $partialGateway -Action 'Create' -EnvironmentVariables @{} | Out-Null
+$partialGateway.State.FailConsent = $false
+Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $partialInventory -Gateway $partialGateway -Action 'Create' | Out-Null
 Assert-True ($partialGateway.State.PasswordCalls -eq 1 -and (@($partialInventory.resources | Where-Object { $_.key -eq 'osapro-func' })).Count -eq 1) 'folytatas nem keszit masodik hosztot vagy titkot'
 
 $foreignRunInventory = New-OsaProInventory -Environment 'dev'
 $foreignGateway = New-TestGateway
 $foreignGateway.State.Foreign = $true
-$foreignRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $foreignRunInventory -Gateway $foreignGateway -Action 'Create' -EnvironmentVariables @{}
+$foreignRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $foreignRunInventory -Gateway $foreignGateway -Action 'Create'
 Assert-True ($foreignRun.Status -eq 'partial' -and @($foreignRunInventory.resources).Count -eq 0) 'idegen nev nem kerul a leltarba'
+
+$resumeInventory = New-OsaProInventory -Environment 'dev'
+$resumeGateway = New-TestGateway
+$resumeGateway.FindByName = {
+    param($Type, $Name)
+    $group = 'osp-dev-rg'
+    if ($Name -eq 'osp-dev-shared-rg' -or $Name -eq 'osp-dev-slack' -or $Name -eq 'ospdevslackst' -or $Name -eq 'osp-dev-ai' -or $Name -eq 'osp-dev-log') {
+        $group = 'osp-dev-shared-rg'
+    }
+    $subscription = '11111111-2222-3333-4444-555555555555'
+    if ($Type -eq 'resourceGroup') {
+        return @{ id = "/subscriptions/$subscription/resourceGroups/$Name" }
+    }
+    return @{ id = "/subscriptions/$subscription/resourceGroups/$group/providers/Microsoft.Resources/$Name" }
+}.GetNewClosure()
+$resumed = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $resumeInventory -Gateway $resumeGateway -Action 'Create'
+Assert-True ($resumed.Status -eq 'complete' -and $resumeGateway.State.DeployCalls -eq 1 -and @($resumeInventory.resources | Where-Object { $_.key -eq 'osapro-func' }).Count -eq 1) 'meglevo eroforras nem keszul ujra'
+
+$takenInventory = New-OsaProInventory -Environment 'dev'
+$takenGateway = New-TestGateway
+$takenGateway.State.StorageNameTaken = $true
+$taken = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $takenInventory -Gateway $takenGateway -Action 'Create'
+$takenLog = $taken.Log -join ' '
+Assert-True ($taken.Status -eq 'partial' -and $takenGateway.State.DeployCalls -eq 0 -and $takenLog -like '*ospdevst*' -and $takenLog -like '*foglalt*') 'elofizetesen kivul foglalt storage nem települ'
 
 $destroyGateway = New-TestGateway
 $preview = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $inventory -Gateway $destroyGateway -Action 'Destroy' -Target 'OsaPro'
@@ -185,6 +291,7 @@ Assert-True (($deletedKeys -contains 'notification-storage') -and ($deletedKeys 
 
 $scriptPath = (Resolve-Path (Join-Path $PSScriptRoot '..\scripts\Invoke-OsaProInfrastructure.ps1')).Path
 $scriptText = Get-Content -Raw -Encoding UTF8 $scriptPath
+Assert-True ($scriptText -match 'Connect-OsaProAccount') 'a script a megadott berlovel jelentkezik be'
 $helpText = $scriptText
 $helper = [powershell]::Create()
 [void]$helper.AddScript("Get-Help -Name '$scriptPath' -Examples | Out-String")

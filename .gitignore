@@ -4,3 +4,4 @@ obj/
 *.user
 TestResults/
 infra/inventory.json
+infra/dev_env.json

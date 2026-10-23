@@ -22,15 +22,20 @@ function Get-OsaProCatalog {
 function Get-OsaProResourceNames {
     param(
         [Parameter(Mandatory = $true)]
-        [string] $Environment
+        [string] $Environment,
+        [Parameter(Mandatory = $true)]
+        [string] $Prefix
     )
 
     if ($Environment -ne 'dev' -and $Environment -ne 'prod') {
         throw "A környezet csak dev vagy prod lehet: $Environment"
     }
+    if (-not [regex]::IsMatch($Prefix, '^[a-z][a-z0-9]{0,12}$')) {
+        throw 'Az előtag kisbetűvel kezdődik, csak kisbetű és szám lehet, legfeljebb 13 karakter.'
+    }
 
-    $hyphen = "osp-$Environment"
-    $compact = "osp$Environment"
+    $hyphen = "$Prefix-$Environment"
+    $compact = "$Prefix$Environment"
     return @{
         Environment = $Environment
         OsaProResourceGroup = "$hyphen-rg"
@@ -49,12 +54,14 @@ function Get-OsaProResourceNames {
 function New-OsaProInventory {
     param(
         [Parameter(Mandatory = $true)]
-        [string] $Environment
+        [string] $Environment,
+        [string] $Prefix = ''
     )
 
     return @{
         status = 'partial'
         environment = $Environment
+        prefix = $Prefix
         resources = @()
         secretLocations = @()
     }
@@ -88,7 +95,11 @@ function Add-OsaProInventoryResource {
 
     $name = $Id
     if ($definition.NameProperty) {
-        $names = Get-OsaProResourceNames -Environment $Inventory.environment
+        $prefix = ''
+        if ($Inventory -is [System.Collections.IDictionary] -and $Inventory.Contains('prefix') -and $null -ne $Inventory['prefix']) {
+            $prefix = [string]$Inventory['prefix']
+        }
+        $names = Get-OsaProResourceNames -Environment ([string]$Inventory.environment) -Prefix $prefix
         $name = [string]$names[$definition.NameProperty]
     }
 
@@ -115,7 +126,9 @@ function Test-OsaProNameClaim {
     param(
         $Inventory,
         [string] $Name,
-        [string] $LiveId
+        [string] $LiveId,
+        [string] $SubscriptionId = '',
+        [string] $ExpectedResourceGroup = ''
     )
 
     if ([string]::IsNullOrWhiteSpace($LiveId)) {
@@ -123,11 +136,18 @@ function Test-OsaProNameClaim {
     }
 
     $owned = @(@($Inventory.resources) | Where-Object { $_.id -eq $LiveId })
-    if ($owned.Count -eq 0) {
-        return 'foreign'
+    if ($owned.Count -gt 0) {
+        return 'owned'
     }
 
-    return 'owned'
+    if (-not [string]::IsNullOrWhiteSpace($SubscriptionId) -and -not [string]::IsNullOrWhiteSpace($ExpectedResourceGroup)) {
+        $prefix = "/subscriptions/$SubscriptionId/resourceGroups/$ExpectedResourceGroup"
+        if ($LiveId -eq $prefix -or $LiveId.StartsWith("$prefix/")) {
+            return 'owned'
+        }
+    }
+
+    return 'foreign'
 }
 
 function Protect-OsaProText {
@@ -187,9 +207,15 @@ function Protect-OsaProInventory {
         }
     }
 
+    $prefix = ''
+    if ($Inventory -is [System.Collections.IDictionary] -and $Inventory.Contains('prefix') -and $null -ne $Inventory['prefix']) {
+        $prefix = [string]$Inventory['prefix']
+    }
+
     return @{
         status = [string]$Inventory.status
         environment = [string]$Inventory.environment
+        prefix = $prefix
         resources = $resources
         secretLocations = $locations
     }

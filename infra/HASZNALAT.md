@@ -1,6 +1,6 @@
 # Infrastruktúra használata
 
-A parancsok a `infra/scripts` könyvtárból futnak. Kell hozzájuk a PowerShell 7, az Azure CLI és a Bicep. Előbb `az login`. A bemenet az `infra/input.example.json` másolata. A SharePoint-hely és a NAV-beállítások a Worker `appsettings.json` nem titkos értékei. Kitöltendő a `tenantId` és a `subscriptionId`. A `dev` vagy `prod` a parancs `-Environment` paramétere, nincs az `appsettings.json` fájlban. Más értéket a paraméter nem fogad el. Az előtag `osp`. A nevek a paraméterből képződnek.
+A parancsok a `infra/scripts` könyvtárból futnak. Kell hozzájuk a PowerShell 7, az Azure CLI és a Bicep. A szkript a bemenet `tenantId` és `subscriptionId` értékével jelentkezik be, mielőtt más Azure-hívás indul. A bemenet az `infra/input.example.json` másolata: a `tenantId`, a `subscriptionId`, a régió és a `prefix`. A szkript csak ebben a bérlőben és előfizetésben dolgozik, és ezeket nem olvassa ki a bejelentkezett fiókból. Az Azure-hívás a megadott előfizetést kapja. A tokenkérés csak a megadott bérlőt kapja. A régió az Azure-erőforrások helye. SharePoint-mappát a szkript nem hoz létre. A `dev` vagy `prod` a parancs `-Environment` paramétere. Más értéket a paraméter nem fogad el. Az előtag a JSON `prefix` mezője: kisbetűvel kezdődik, csak kisbetű és szám, legfeljebb 13 karakter. A nevek ebből és a környezetből képződnek. A táblázat a `prefix` érték `osp` mellett érvényes.
 
 | Szerep | `-Environment dev` | `-Environment prod` |
 |---|---|---|
@@ -15,15 +15,15 @@ A parancsok a `infra/scripts` könyvtárból futnak. Kell hozzájuk a PowerShell
 | Slack hoszt storage | `ospdevslackst` | `ospprodslackst` |
 | Értesítési Table Storage | `ospdevtbl` | `ospprodtbl` |
 
-A SharePoint-mappa neve a meglévő `FolderPath`, most `OsaPro.Test`. Nem a környezetből képződik. Meglévő leltárnál a paraméternek egyeznie kell a leltár környezetével.
+Meglévő leltárnál a környezetnek és az előtagnak egyeznie kell a leltáréval.
 
 A leltár útvonala a gépen marad. Nem kerül verziókezelésbe. Titokérték nincs benne, csak a tárolás helye, például `Secrets__ExcelClientId`.
 
 ## Telepítő joga
 
-A bejelentkezett személy hozza létre az erőforráscsoportokat, a szerepköröket, az Excel-alkalmazásregisztrációt és a konfigurált mappát, és ő adja meg az admin consentet. Ez a jog nem kerül a futó alkalmazásra. A futó alkalmazás Graph-engedélye `Sites.Read.All` és `Files.ReadWrite.All`. A `Files.ReadWrite.All` a tenáns fájljaira szól. A kód csak a konfigurált mappát használja.
+A bejelentkezett személy hozza létre az erőforráscsoportokat, a szerepköröket és az Excel-alkalmazásregisztrációt, és ő adja meg az admin consentet. Ez a jog nem kerül a futó alkalmazásra. A futó alkalmazás Graph-engedélye `Sites.Read.All` és `Files.ReadWrite.All`. A `Files.ReadWrite.All` a tenáns fájljaira szól. A kód csak a konfigurált mappát használja. A szkript SharePoint-webhelyet és mappát nem hoz létre, és nem töröl.
 
-A NAV-titkot a szkript nem gyártja. A bemenet az operátor környezetváltozójának nevét tartalmazza. Ha a változó megvan, az értéke a Function App környezetbe kerül. Ha nincs meg, a létrehozás ettől még teljes lehet. Slack-token nem készül. Key Vault nincs.
+A szkript NAV-titkot és Slack-tokent nem gyárt, és a Nav- vagy Excel-beállításokat nem írja a Function Appra. Key Vault nincs.
 
 ## Létrehozás
 
@@ -31,7 +31,7 @@ A NAV-titkot a szkript nem gyártja. A bemenet az operátor környezetváltozój
 ./Invoke-OsaProInfrastructure.ps1 -Action Create -Environment dev -InputPath input.json -InventoryPath inventory.json
 ```
 
-A második futás a leltár azonosítóit használja. Nem készít második regisztrációt, engedélyt vagy Excel-titkot. Foglalt idegen névnél megáll. Részleges futás után a hiányzó saját lépés pótolható. A teljes siker csak akkor jelenik meg, ha minden kötelező lépés sikerült.
+A második futás a leltár azonosítóit használja. A megadott előfizetés várt erőforráscsoportjában már meglévő, képzett nevű erőforrást nem hozza létre újra. Nem készít második regisztrációt, engedélyt vagy Excel-titkot. Máshol foglalt névnél megáll. Olyan storage-névnél, amely az előfizetésen kívül foglalt, a telepítés el sem indul. Részleges futás után a hiányzó saját lépés pótolható. A teljes siker csak akkor jelenik meg, ha minden kötelező lépés sikerült.
 
 ## Ellenőrzés
 
