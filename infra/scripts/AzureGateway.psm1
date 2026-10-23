@@ -442,7 +442,7 @@ function New-OsaProAzureGateway {
                 }
             }
             catch {
-                $current = @{}
+                throw "A Function App beállításainak olvasása sikertelen. $($_.Exception.Message)"
             }
             foreach ($key in @($Settings.Keys)) {
                 $current[$key] = [string]$Settings[$key]
@@ -487,7 +487,9 @@ function New-OsaProAzureGateway {
                 try {
                     Invoke-OsaProRest -Method Delete -Uri "https://graph.microsoft.com/v1.0/applications/$($Resource.id)" -Token $token | Out-Null
                 }
-                catch { }
+                catch {
+                    if ($_.Exception.Message -notlike 'HTTP 404*') { throw }
+                }
                 return
             }
             if ($Resource.type -eq 'servicePrincipal') {
@@ -495,7 +497,9 @@ function New-OsaProAzureGateway {
                 try {
                     Invoke-OsaProRest -Method Delete -Uri "https://graph.microsoft.com/v1.0/servicePrincipals/$($Resource.id)" -Token $token | Out-Null
                 }
-                catch { }
+                catch {
+                    if ($_.Exception.Message -notlike 'HTTP 404*') { throw }
+                }
                 return
             }
             if ($Resource.type -eq 'resourceGroup') {

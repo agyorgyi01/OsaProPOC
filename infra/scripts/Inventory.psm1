@@ -200,11 +200,20 @@ function Protect-OsaProInventory {
     }
 
     $locations = @()
+    $keptValues = @('Secrets:ExcelClientId', 'Secrets:ExcelClientSecret')
     foreach ($location in @($Inventory.secretLocations)) {
-        $locations += @{
+        $entry = @{
             key = [string]$location.key
             location = [string]$location.location
         }
+        $secretValue = ''
+        if ($location -is [System.Collections.IDictionary] -and $location.Contains('value') -and $null -ne $location['value']) {
+            $secretValue = [string]$location['value']
+        }
+        if (($entry.key -in $keptValues) -and -not [string]::IsNullOrWhiteSpace($secretValue)) {
+            $entry.value = $secretValue
+        }
+        $locations += $entry
     }
 
     $prefix = ''

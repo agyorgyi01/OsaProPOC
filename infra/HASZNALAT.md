@@ -17,7 +17,7 @@ A parancsok a `infra/scripts` könyvtárból futnak. Kell hozzájuk a PowerShell
 
 Meglévő leltárnál a környezetnek és az előtagnak egyeznie kell a leltáréval.
 
-A leltár útvonala a gépen marad. Nem kerül verziókezelésbe. Titokérték nincs benne, csak a tárolás helye, például `Secrets__ExcelClientId`.
+A leltár útvonala a gépen marad. Nem kerül verziókezelésbe. Az Excel client azonosító és a client secret értéke benne van. A napló nem írja ki. Token, storage-kulcs, SAS és a kapcsolatkarakterlánc nincs benne.
 
 ## Telepítő joga
 
@@ -31,7 +31,7 @@ A szkript NAV-titkot és Slack-tokent nem gyárt, és a Nav- vagy Excel-beállí
 ./Invoke-OsaProInfrastructure.ps1 -Action Create -Environment dev -InputPath input.json -InventoryPath inventory.json
 ```
 
-A második futás a leltár azonosítóit használja. A megadott előfizetés várt erőforráscsoportjában már meglévő, képzett nevű erőforrást nem hozza létre újra. Nem készít második regisztrációt, engedélyt vagy Excel-titkot. Máshol foglalt névnél megáll. Olyan storage-névnél, amely az előfizetésen kívül foglalt, a telepítés el sem indul. Részleges futás után a hiányzó saját lépés pótolható. A teljes siker csak akkor jelenik meg, ha minden kötelező lépés sikerült.
+A második futás a leltár azonosítóit használja. A megadott előfizetés várt erőforráscsoportjában már meglévő, képzett nevű erőforrást nem hozza létre újra. Nem készít második regisztrációt, engedélyt vagy Excel-titkot. A telepítés után a leltárban lévő Excel client azonosítót és client secretet visszaírja a Function Appra. Máshol foglalt névnél megáll. Olyan storage-névnél, amely foglalt, de a megadott előfizetésben élő fiókként nincs meg, a telepítés el sem indul. Részleges futás után a hiányzó saját lépés pótolható. A teljes siker csak akkor jelenik meg, ha minden kötelező lépés sikerült.
 
 ## Ellenőrzés
 
@@ -63,4 +63,4 @@ A megosztott megerősítés törli a Slack-hosztot, a saját storage-át, az App
 ./Invoke-OsaProInfrastructure.ps1 -Action Destroy -Target Shared -Environment dev -Confirm -InputPath input.json -InventoryPath inventory.json
 ```
 
-A SharePoint-hely, a dokumentumtár, a telepítő által létrehozott mappa, a dokumentumok és az Excel-fájlok egyik parancsban sem törlődnek. Más alkalmazás engedélye nem vonódik vissza. Eltérő azonosítónál törlés nem indul.
+A SharePoint-hely, a dokumentumtár, a mappa, a dokumentumok és az Excel-fájlok egyik parancsban sem törlődnek. Más alkalmazás engedélye nem vonódik vissza. Eltérő azonosítónál törlés nem indul.

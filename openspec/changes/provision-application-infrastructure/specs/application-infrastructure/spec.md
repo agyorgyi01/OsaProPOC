@@ -103,11 +103,11 @@ A futó OsaPro alkalmazás MUST a `Sites.Read.All` és a `Files.ReadWrite.All` a
 - **THEN** az alkalmazásengedély `Sites.Read.All` és `Files.ReadWrite.All`, és az admin consent megtörtént
 
 ### Requirement: Titok a Function App környezetében
-A titkos érték MUST a Function App környezetében legyen elérhető. A bemenet, a leltár, a napló és a verziókezelt fájl MUST NOT tartalmazzon jelszót, client secretet, tokent, SAS-t vagy storage-kulcsot.
+A titkos érték MUST a Function App környezetében legyen elérhető. Az Excel client azonosító és a client secret értéke MUST a helyi leltárban is megmaradni. A napló, a bemenet és a verziókezelt fájl MUST NOT tartalmazni ezeket. Tokent, SAS-t, storage-kulcsot és kapcsolatkarakterláncot a leltár MUST NOT tartalmazni.
 
-#### Scenario: Leltár csak hivatkozás
+#### Scenario: Excel-titok a leltárban
 - **WHEN** a létrehozás titkot helyez el
-- **THEN** a leltár a tárolás helyét nevezi meg, és a titok értéke nincs benne
+- **THEN** a leltár tartalmazza az Excel client azonosító és a client secret értékét, a napló nem
 
 ### Requirement: Meglévő SharePoint-hely
 A művelet MUST NOT létrehozni SharePoint-webhelyet vagy mappát. A hiányzó mappa MUST NOT a telepítő feladata lenni.
@@ -203,11 +203,15 @@ A létrehozás MUST NOT bemásolni a Nav- és Excel-beállításokat és a NAV-t
 - **THEN** a szkript nem írja a Function App környezetébe, és a titok nincs a leltárban
 
 ### Requirement: Excel client secret
-A szkript MUST egyszer az Excel client azonosítót és a client secretet a Function App környezetbe írni. Az Excel-bérlő azonosítóját MUST NOT írni. Ismételt létrehozás MUST NOT forgatni a client secretet.
+A szkript MUST az Excel client azonosítót és a client secretet a Function App környezetbe írni. Új client secret MUST csak akkor készülni, ha a leltárban még nincs értéke. Ismételt létrehozás MUST ezt az értéket visszaírni, és MUST NOT új titkot készíteni. Az Excel-bérlő azonosítóját MUST NOT írni.
 
 #### Scenario: Excel client secret
 - **WHEN** a létrehozás először helyezi el az Excel-titkot
 - **THEN** a környezetben ott a client azonosító és a client secret, az Excel-bérlő azonosítója nincs a szkript által írva
+
+#### Scenario: Ismételt visszaírás
+- **WHEN** a leltárban már megvan a client azonosító és a client secret értéke
+- **THEN** a telepítés után mindkettő visszakerül a Function App környezetébe, és új titok nem készül
 
 ### Requirement: Azure-hiba
 Sikertelen Azure-hívásnál a művelet MUST a hiba okát a naplóba írni. A napló MUST NOT tartalmazni titkot, tokent, storage-kulcsot vagy SAS-t.

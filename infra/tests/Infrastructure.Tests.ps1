@@ -50,11 +50,15 @@ $secretValue = 'super-secret-value'
 $dirty = New-OsaProInventory -Environment 'dev' -Prefix 'osp'
 Add-OsaProInventoryResource -Inventory $dirty -Key 'osapro-func' -Id '/id/osapro-func' | Out-Null
 $dirty.resources[0].clientSecret = $secretValue
-$dirty.secretLocations = @(@{ key = 'Secrets:ExcelClientSecret'; location = 'Secrets__ExcelClientSecret'; value = $secretValue })
+$dirty.secretLocations = @(
+    @{ key = 'Secrets:ExcelClientSecret'; location = 'Secrets__ExcelClientSecret'; value = $secretValue }
+    @{ key = 'ApplicationInsights'; location = 'APPLICATIONINSIGHTS_CONNECTION_STRING'; value = 'InstrumentationKey=abc' }
+)
 $clean = Protect-OsaProInventory -Inventory $dirty
 $cleanJson = $clean | ConvertTo-Json -Depth 6
 $redacted = Protect-OsaProText -Text "Bearer eyJ.token client_secret=$secretValue AccountKey=storagekey sig=sassig" -SecretValues @($secretValue)
-Assert-True ($cleanJson -notlike "*$secretValue*" -and $redacted -notlike "*$secretValue*" -and $redacted -notlike '*AccountKey=storagekey*' -and $redacted -notlike '*sig=sassig*' -and $redacted -notlike '*eyJ.token*') 'titok kikerul a leltarbol es a naplobol'
+$keptSecret = @($clean.secretLocations | Where-Object { $_.key -eq 'Secrets:ExcelClientSecret' })
+Assert-True ($keptSecret.Count -eq 1 -and $keptSecret[0].value -eq $secretValue -and -not $clean.resources[0].ContainsKey('clientSecret') -and $cleanJson -notlike '*InstrumentationKey=abc*' -and $redacted -notlike "*$secretValue*" -and $redacted -notlike '*AccountKey=storagekey*' -and $redacted -notlike '*sig=sassig*' -and $redacted -notlike '*eyJ.token*') 'excel titok a leltarban marad, mas titok es a naplo nem'
 
 foreach ($key in @('osapro-func', 'osapro-storage', 'notification-storage', 'excel-app', 'excel-sp', 'shared-rg', 'slack-func', 'slack-storage', 'app-insights', 'workspace', 'sharepoint-folder')) {
     Add-OsaProInventoryResource -Inventory $inventory -Key $key -Id "/id/$key" | Out-Null
@@ -72,6 +76,8 @@ $sharedBicep = Get-Content -Raw (Join-Path $PSScriptRoot '..\bicep\shared.bicep'
 $allBicep = $bicep + $osaproBicep + $sharedBicep
 Assert-True ($bicep -like '*${prefix}-${environment}-rg*' -and $bicep -like '*${prefix}${environment}st*' -and $bicep -match 'param prefix string') 'bicep nevkepzes'
 Assert-True ($allBicep -notmatch 'alwaysReady') 'nincs always-ready'
+Assert-True ($allBicep -match 'functionapp,linux' -and $allBicep -match "name: 'dotnet-isolated'" -and $allBicep -match "version: '10.0'" -and $allBicep -match "name: 'FC1'" -and $allBicep -match 'ertesitesek' -and $allBicep -match 'AzureWebJobsStorage__credential' -and $allBicep -match 'allowSharedKeyAccess: false' -and $allBicep -match 'instanceMemoryMB: 2048') 'hoszt es storage beallitas'
+Assert-True ($osaproBicep -match 'tableDataContributorRoleId' -and $sharedBicep -notmatch 'tableDataContributorRoleId' -and $allBicep -match 'ba92f5b4-2d11-453d-a403-e96b0029c9fe') 'tablajog csak az OsaPro hoszton'
 Assert-True (@([regex]::Matches($bicep, "Microsoft.Resources/resourceGroups")).Count -eq 2) 'ket eroforrascsoport'
 $outputNames = @([regex]::Matches($bicep, '(?m)^output\s+(\S+)')) | ForEach-Object { $_.Groups[1].Value }
 $secretOutputs = @($outputNames | Where-Object { $_ -match '(?i)secret|password|token|connectionString|accountKey' })
@@ -221,6 +227,7 @@ Assert-True $foreignArm 'idegen elofizetes azonositoja tilos'
 $gatewayText = Get-Content -Raw -Encoding UTF8 (Join-Path $PSScriptRoot '..\scripts\AzureGateway.psm1')
 Assert-True ($gatewayText -notmatch 'account show' -and $gatewayText -notmatch 'account list' -and $gatewayText -match 'az login' -and $gatewayText -match '--tenant' -and $gatewayText -match '--subscription' -and $gatewayText -notmatch 'conflictBehavior') 'a cel nem a bejelentkezett fiokbol jon'
 Assert-True ($gatewayText -match 'get-access-token[\s\S]{0,220}-SkipSubscription' -or $gatewayText -match '-SkipSubscription[\s\S]{0,80}get-access-token') 'a token csak a berlőt kapja'
+Assert-True ($gatewayText -match 'A Function App beállításainak olvasása sikertelen' -and $gatewayText -match 'HTTP 404' -and $gatewayText -match '332a536c-c7ef-4017-ab91-336970924f0d' -and $gatewayText -match '75359482-378d-4052-8f01-80520e7db3cd') 'beallitas es regisztracio torles nem nyel el hibát'
 
 
 $createdInventory = New-OsaProInventory -Environment 'dev'
@@ -229,12 +236,21 @@ $firstRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $cr
 $secondRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $createdInventory -Gateway $gateway -Action 'Create'
 $settingsJson = ($gateway.State.Settings | ConvertTo-Json -Depth 6)
 Assert-True ($firstRun.Status -eq 'complete' -and $secondRun.Status -eq 'complete') 'hianyzo NAV titok mellett teljes'
-Assert-True ($gateway.State.PasswordCalls -eq 1 -and $gateway.State.PermissionCalls -eq 1) 'masodik futas nem ker uj titkot es engedelyt'
+$writes = @($gateway.State.Settings)
+$secondLog = $secondRun.Log -join ' '
+Assert-True ($gateway.State.PasswordCalls -eq 1 -and $gateway.State.PermissionCalls -eq 1 -and $writes.Count -eq 2 -and $writes[1]['Secrets__ExcelClientId'] -eq 'app-id' -and $writes[1]['Secrets__ExcelClientSecret'] -eq $secretValue -and $secondLog -notlike "*$secretValue*") 'masodik futas visszaírja a titkot, ujat nem ker'
 Assert-True (($settingsJson -notlike '*OSP_NAV_PASSWORD*') -and ($settingsJson -notlike '*Secrets__NavPassword*') -and ($settingsJson -notlike '*Nav__*') -and ($settingsJson -notlike '*Excel__*')) 'NAV es Excel beallitas nem masolodik'
 $stored = Protect-OsaProInventory -Inventory $createdInventory | ConvertTo-Json -Depth 6
 $logText = $firstRun.Log -join ' '
-Assert-True (($stored -notlike "*$secretValue*") -and ($logText -notlike "*$secretValue*")) 'excel titok nincs a leltarban es a naploban'
+$storedSecret = @($createdInventory.secretLocations | Where-Object { $_.key -eq 'Secrets:ExcelClientSecret' })
+$storedClient = @($createdInventory.secretLocations | Where-Object { $_.key -eq 'Secrets:ExcelClientId' })
+Assert-True ($storedSecret.Count -eq 1 -and $storedSecret[0].value -eq $secretValue -and $storedClient.Count -eq 1 -and $storedClient[0].value -eq 'app-id' -and $stored -like "*$secretValue*" -and $logText -notlike "*$secretValue*") 'excel titok a leltarban van, a naploban nincs'
 Assert-True (@($createdInventory.resources | Where-Object { $_.key -eq 'sharepoint-folder' }).Count -eq 0) 'mappa nem keszul'
+$missingInventory = New-OsaProInventory -Environment 'dev' -Prefix 'osp'
+$missingInventory.secretLocations = @(@{ key = 'Secrets:ExcelClientSecret'; location = 'Secrets__ExcelClientSecret' })
+$missingGateway = New-TestGateway
+$missingRun = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $missingInventory -Gateway $missingGateway -Action 'Create'
+Assert-True ($missingRun.Status -eq 'partial' -and $missingGateway.State.PasswordCalls -eq 0 -and (($missingRun.Log -join ' ') -like '*új titok nem készül*')) 'hianyzo leltarertekbol nem keszul uj titok'
 
 $partialInventory = New-OsaProInventory -Environment 'dev'
 $partialGateway = New-TestGateway
@@ -273,7 +289,7 @@ $takenGateway = New-TestGateway
 $takenGateway.State.StorageNameTaken = $true
 $taken = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $takenInventory -Gateway $takenGateway -Action 'Create'
 $takenLog = $taken.Log -join ' '
-Assert-True ($taken.Status -eq 'partial' -and $takenGateway.State.DeployCalls -eq 0 -and $takenLog -like '*ospdevst*' -and $takenLog -like '*foglalt*') 'elofizetesen kivul foglalt storage nem települ'
+Assert-True ($taken.Status -eq 'partial' -and $takenGateway.State.DeployCalls -eq 0 -and $takenLog -like '*ospdevst*' -and $takenLog -like '*foglalt*' -and $takenLog -notlike '*kívül*') 'foglalt storage nem települ'
 
 $destroyGateway = New-TestGateway
 $preview = Invoke-OsaProInfrastructure -InputObject $inputObject -Inventory $inventory -Gateway $destroyGateway -Action 'Destroy' -Target 'OsaPro'

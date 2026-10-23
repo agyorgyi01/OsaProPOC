@@ -96,6 +96,18 @@ function Add-SettingIfPresent {
     $Settings[$Name] = $text
 }
 
+function Get-OsaProStoredSecret {
+    param($Inventory, [string] $Key)
+    $entry = @($Inventory.secretLocations) | Where-Object { $_.key -eq $Key } | Select-Object -First 1
+    if (-not $entry) {
+        return ''
+    }
+    if ($entry -is [System.Collections.IDictionary] -and $entry.Contains('value') -and $null -ne $entry['value']) {
+        return [string]$entry['value']
+    }
+    return ''
+}
+
 function Get-OsaProAppSettings {
     param($ExcelAppId, [string] $ExcelSecret, [bool] $IncludeExcelSecret)
     $settings = @{}
@@ -169,7 +181,7 @@ function Invoke-OsaProCreate {
             }
             $available = & $Gateway.CheckStorageName $storageName
             if (-not $available) {
-                throw "A $storageName storage-név a megadott előfizetésen kívül foglalt. A meglévő erőforrás nem jön létre újra."
+                throw "A $storageName storage-név foglalt. A telepítés nem indul. A meglévő erőforrás nem jön létre újra."
             }
         }
         $deployed = & $Gateway.Deploy $environment ([string](Get-OsaProInputValue $InputObject 'location')) $prefix
@@ -238,8 +250,8 @@ function Invoke-OsaProCreate {
             $functionApp = Get-OsaProResource -Inventory $Inventory -Key 'osapro-func'
             & $Gateway.SetAppSettings $functionApp.id $settings
             foreach ($pair in @(
-                @{ key = 'Secrets:ExcelClientId'; location = 'Secrets__ExcelClientId' }
-                @{ key = 'Secrets:ExcelClientSecret'; location = 'Secrets__ExcelClientSecret' }
+                @{ key = 'Secrets:ExcelClientId'; location = 'Secrets__ExcelClientId'; value = $appId }
+                @{ key = 'Secrets:ExcelClientSecret'; location = 'Secrets__ExcelClientSecret'; value = $secret }
             )) {
                 $already = @(@($Inventory.secretLocations) | Where-Object { $_.key -eq $pair.key })
                 if ($already.Count -eq 0) {
@@ -250,7 +262,15 @@ function Invoke-OsaProCreate {
             Add-OsaProLog $Result 'Az Excel-titok a Function App környezetbe került.' $secret
         }
         else {
-            Add-OsaProLog $Result 'A meglévő Excel-titok nem cserélődik.'
+            $storedSecret = Get-OsaProStoredSecret $Inventory 'Secrets:ExcelClientSecret'
+            $storedClient = Get-OsaProStoredSecret $Inventory 'Secrets:ExcelClientId'
+            if ([string]::IsNullOrWhiteSpace($storedSecret) -or [string]::IsNullOrWhiteSpace($storedClient)) {
+                throw 'A leltárban lévő Excel-titok értéke hiányzik. A Function App beállítása nem írható vissza, és új titok nem készül.'
+            }
+            $settings = Get-OsaProAppSettings -ExcelAppId $storedClient -ExcelSecret $storedSecret -IncludeExcelSecret $true
+            $functionApp = Get-OsaProResource -Inventory $Inventory -Key 'osapro-func'
+            & $Gateway.SetAppSettings $functionApp.id $settings
+            Add-OsaProLog $Result 'A meglévő Excel-titok visszakerült a Function App környezetébe.' $storedSecret
         }
     }
     catch {
