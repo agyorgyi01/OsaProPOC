@@ -41,4 +41,4 @@ Verziókezelt környezetfájl nincs. Az `appsettings.json` értékei minden kör
 
 No critical issues or warnings. 2 suggestions to consider. Ready for archive (with noted improvements).
 
-Emberi code review jóváhagyás nincs ebben a riportban. Archiválás, spec-szinkron és merge nem indul.
+Emberi code review jóváhagyás: 2026-10-26. A spec szinkron a `9269938` commitban van. A főágra emelés és az archiválás ezután indul.
