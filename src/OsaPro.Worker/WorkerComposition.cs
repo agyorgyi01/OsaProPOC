@@ -11,19 +11,22 @@ public static class WorkerComposition
 {
     public const string UserSecretsId = "8f4e2c1a-6b7d-4e9f-a1c2-3d4e5f607182";
 
-    public static IHost Build(string contentRoot, bool development, string? userSecretsId)
+    public static IHost Build(
+        string contentRoot,
+        string environmentName,
+        string? userSecretsId,
+        bool includeUserSecrets = true)
     {
         var builder = FunctionsApplication.CreateBuilder([]);
         builder.Environment.ContentRootPath = contentRoot;
-        builder.Environment.EnvironmentName = development
-            ? Environments.Development
-            : Environments.Production;
+        builder.Environment.EnvironmentName = environmentName;
         builder.Configuration.Sources.Clear();
         SecretConfiguration.AddSources(
             builder.Configuration,
             contentRoot,
-            includeUserSecrets: true,
-            userSecretsId);
+            includeUserSecrets,
+            userSecretsId,
+            environmentName);
 
         var masker = SecretMasker.FromConfiguration(builder.Configuration);
         var consoleFactory = LoggerFactory.Create(logging => logging.AddConsole());

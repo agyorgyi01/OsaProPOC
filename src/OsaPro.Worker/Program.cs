@@ -3,8 +3,18 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using OsaPro.Worker;
 
-var development = IsDevelopment();
-var plan = WorkerEntry.Plan(args, development);
+var startup = WorkerStartup.Prepare(
+    Environment.GetEnvironmentVariable("AZURE_FUNCTIONS_ENVIRONMENT"),
+    Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT"),
+    Environment.GetEnvironmentVariable("WEBSITE_INSTANCE_ID"));
+
+if (startup.ExitCode is int exitCode)
+{
+    Console.Error.WriteLine(WorkerStartup.InvalidEnvironmentMessage);
+    return exitCode;
+}
+
+var plan = WorkerEntry.Plan(args, startup.IsDevelopment);
 
 if (plan.ExitCode != WorkerEntry.Success)
 {
@@ -13,23 +23,17 @@ if (plan.ExitCode != WorkerEntry.Success)
 
 var host = WorkerComposition.Build(
     contentRoot: AppContext.BaseDirectory,
-    development: development,
-    userSecretsId: WorkerComposition.UserSecretsId);
+    environmentName: startup.EnvironmentName!,
+    userSecretsId: WorkerComposition.UserSecretsId,
+    includeUserSecrets: startup.IncludeUserSecrets);
 
 if (plan.FunctionId is not null)
 {
     var logger = host.Services
         .GetRequiredService<ILoggerFactory>()
         .CreateLogger("OsaPro.Worker");
-    return WorkerEntry.Execute(args, development, logger);
+    return WorkerEntry.Execute(args, startup.IsDevelopment, logger);
 }
 
 host.Run();
 return WorkerEntry.Success;
-
-static bool IsDevelopment()
-{
-    var environment = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT")
-        ?? Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-    return string.Equals(environment, Environments.Development, StringComparison.OrdinalIgnoreCase);
-}

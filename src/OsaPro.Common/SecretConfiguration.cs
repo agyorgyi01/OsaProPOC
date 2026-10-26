@@ -10,10 +10,12 @@ public static class SecretConfiguration
         IConfigurationBuilder builder,
         string contentRoot,
         bool includeUserSecrets,
-        string? userSecretsId)
+        string? userSecretsId,
+        string environmentName = HostEnvironment.Production)
     {
         builder.SetBasePath(contentRoot);
         builder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+        builder.AddJsonFile($"appsettings.{environmentName}.json", optional: true, reloadOnChange: false);
         builder.AddEnvironmentVariables();
 
         if (includeUserSecrets && !string.IsNullOrWhiteSpace(userSecretsId))
