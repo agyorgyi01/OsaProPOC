@@ -71,10 +71,10 @@ public class EnvironmentConfigurationTests
         var contentRoot = Directory.CreateTempSubdirectory("osapro-env-");
         File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.json"),
-            """{ "Nav": { "BaseUrl": "https://api.onlineszamla.nav.gov.hu" } }""");
+            """{ "Sample": { "Value": "base" } }""");
         File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.Development.json"),
-            """{ "Nav": { "BaseUrl": "https://api-test.onlineszamla.nav.gov.hu" } }""");
+            """{ "Sample": { "Value": "overlay" } }""");
         var secretsId = "osapro-common-env-order";
         var secretsDirectory = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
@@ -88,21 +88,21 @@ public class EnvironmentConfigurationTests
         try
         {
             var fromFile = Build(contentRoot.FullName, includeUserSecrets: false, userSecretsId: null, HostEnvironment.Development);
-            Assert.Equal("https://api-test.onlineszamla.nav.gov.hu", fromFile["Nav:BaseUrl"]);
+            Assert.Equal("overlay", fromFile["Sample:Value"]);
 
-            Environment.SetEnvironmentVariable("Nav__BaseUrl", "https://env.example");
+            Environment.SetEnvironmentVariable("Sample__Value", "from-env");
             var fromEnvironment = Build(contentRoot.FullName, includeUserSecrets: false, userSecretsId: null, HostEnvironment.Development);
-            Assert.Equal("https://env.example", fromEnvironment["Nav:BaseUrl"]);
+            Assert.Equal("from-env", fromEnvironment["Sample:Value"]);
 
             File.WriteAllText(
                 secretsPath,
-                """{ "Nav": { "BaseUrl": "https://secret.example" } }""");
+                """{ "Sample": { "Value": "from-secret" } }""");
             var fromSecrets = Build(contentRoot.FullName, includeUserSecrets: true, secretsId, HostEnvironment.Development);
-            Assert.Equal("https://secret.example", fromSecrets["Nav:BaseUrl"]);
+            Assert.Equal("from-secret", fromSecrets["Sample:Value"]);
         }
         finally
         {
-            Environment.SetEnvironmentVariable("Nav__BaseUrl", null);
+            Environment.SetEnvironmentVariable("Sample__Value", null);
             if (previousSecrets is null)
             {
                 File.Delete(secretsPath);
@@ -120,11 +120,11 @@ public class EnvironmentConfigurationTests
         var contentRoot = Directory.CreateTempSubdirectory("osapro-env-missing-");
         File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.json"),
-            """{ "Nav": { "BaseUrl": "https://api.onlineszamla.nav.gov.hu" } }""");
+            """{ "Sample": { "Value": "base" } }""");
 
         var configuration = Build(contentRoot.FullName, includeUserSecrets: false, userSecretsId: null, HostEnvironment.Production);
 
-        Assert.Equal("https://api.onlineszamla.nav.gov.hu", configuration["Nav:BaseUrl"]);
+        Assert.Equal("base", configuration["Sample:Value"]);
     }
 
     [Fact]
@@ -133,10 +133,10 @@ public class EnvironmentConfigurationTests
         var contentRoot = Directory.CreateTempSubdirectory("osapro-env-default-");
         File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.json"),
-            """{ "Nav": { "BaseUrl": "https://api.onlineszamla.nav.gov.hu" } }""");
+            """{ "Sample": { "Value": "base" } }""");
         File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.Test.json"),
-            """{ "Nav": { "BaseUrl": "https://api-test.onlineszamla.nav.gov.hu" } }""");
+            """{ "Sample": { "Value": "overlay" } }""");
         var previous = Environment.GetEnvironmentVariable("DOTNET_ENVIRONMENT");
         Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", HostEnvironment.Test);
 
@@ -146,7 +146,7 @@ public class EnvironmentConfigurationTests
             SecretConfiguration.AddSources(builder, contentRoot.FullName, includeUserSecrets: false, userSecretsId: null);
             var configuration = builder.Build();
 
-            Assert.Equal("https://api.onlineszamla.nav.gov.hu", configuration["Nav:BaseUrl"]);
+            Assert.Equal("base", configuration["Sample:Value"]);
         }
         finally
         {

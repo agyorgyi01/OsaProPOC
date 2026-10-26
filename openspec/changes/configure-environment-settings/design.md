@@ -10,7 +10,7 @@ A motiváció a `proposal.md` Why szakaszában van. A követelmények a `specs/a
 
 - A kanonikus környezetnév egy tiszta függvény legyen, a Worker pedig ezt a nevet adja tovább a betöltőnek és a hostnak.
 - Az ismeretlen név a konfiguráció összeállítása előtt, nem nulla kilépési kóddal állítsa meg a folyamatot.
-- A környezetfájl opcionális JSON-forrás legyen, kanonikus fájlnévvel. A build és a publish ugyanazzal a másolási szabállyal vigye, mint az `appsettings.json`.
+- A környezetfájl opcionális JSON-forrás legyen, kanonikus fájlnévvel. Verziókezelt környezetfájl nem készül.
 
 **Non-Goals:**
 
@@ -28,7 +28,7 @@ A `Program` olvassa a két változót, és az `ASPNETCORE_ENVIRONMENT` értéket
 
 A `--invoke` továbbra is csak akkor fut, ha a kanonikus név `Development`. A host `EnvironmentName` értéke a kanonikus név, a `Test` nevet is beleértve.
 
-Alternatíva: a .NET host alapértelmezett lánca, benne az `ASPNETCORE_ENVIRONMENT`. Elvetve, mert a spec ezt a változót kizárja, és a mai kód sem a keret alapértelmezett forráslistáját használja. Alternatíva: ismeretlen név helyett `Production`. Elvetve, mert egy elírás az éles NAV-címmel indítana.
+Alternatíva: a .NET host alapértelmezett lánca, benne az `ASPNETCORE_ENVIRONMENT`. Elvetve, mert a spec ezt a változót kizárja, és a mai kód sem a keret alapértelmezett forráslistáját használja. Alternatíva: ismeretlen név helyett `Production`. Elvetve, mert egy elírás nem eshet vissza `Production`re.
 
 ### 2. Az `AddSources` a nevet paraméterként kapja
 
@@ -44,29 +44,19 @@ Ha a `WEBSITE_INSTANCE_ID` whitespace-től eltérő, a host Azure-ban fut, és a
 
 Alternatíva: `Production` néven nincs User Secrets. Elvetve, mert a spec a helyi `Production` indításnál is kéri. Alternatíva: az `AZURE_FUNCTIONS_ENVIRONMENT` kitöltöttsége jelenti az Azure-t. Elvetve, mert ugyanezt a változót helyben is a `Test` név választására használjuk.
 
-### 4. Két környezetfájl, az éles cím az alapfájlban
+### 4. Nincs paraméterhez kötött környezetfájl
 
-Az `appsettings.json` `Nav:BaseUrl` értéke `https://api.onlineszamla.nav.gov.hu`. A kikommentezett tesztcím kikerül az alapfájlból. Az `appsettings.Development.json` és az `appsettings.Test.json` csak ezt tartalmazza:
+A `Nav:BaseUrl` ugyanolyan appsettings érték, mint a többi. A change nem ad hozzá `appsettings.Development.json`, `appsettings.Test.json` vagy `appsettings.Production.json` fájlt. Minden környezet az `appsettings.json` értékét használja, amíg egy későbbi forrás felül nem írja. Az opcionális környezetfájl mechanizmus megmarad, verziókezelt példánya nincs. Az Excel-szakasz és a `Secrets` kulcsok az alapfájlban maradnak. A `local.settings.json` másolási szabálya változatlan.
 
-```json
-{
-  "Nav": {
-    "BaseUrl": "https://api-test.onlineszamla.nav.gov.hu"
-  }
-}
-```
-
-`appsettings.Production.json` nem készül. Az Excel-szakasz és a `Secrets` kulcsok az alapfájlban maradnak, üres titokértékekkel. A két új fájl a csprojban az `appsettings.json` mellé kerül, `CopyToOutputDirectory` értéke `PreserveNewest`. `CopyToPublishDirectory` nem `Never`, ezért a publish is viszi. A `local.settings.json` másolási szabálya változatlan.
-
-Alternatíva: üres `appsettings.Production.json`. Elvetve, mert nincs production-only felülírás, a hiányzó fájl pedig nem hiba.
+Alternatíva: `Development` és `Test` fájl, amely csak a `Nav:BaseUrl` értéket írja felül. Elvetve, mert ez a kulcs nem külön szabály.
 
 ## Risks / Trade-offs
 
-- [A helyi `Development` indítás a teszt NAV-gyökeret hívja] → ez a change célja. Az éles gyökér az alapfájlban marad, és `Production` néven, felülírás nélkül az töltődik.
-- [A meglévő dev Function Appon nincs `AZURE_FUNCTIONS_ENVIRONMENT`] → a publikált host `Production` marad, és az alapfájl éles NAV-címét használja. Ezt a változót ez a change nem állítja be.
+- [Nincs verziókezelt környezetfájl] → minden kulcs az alapfájlból jön, amíg környezeti változó vagy User Secrets felül nem írja.
+- [A meglévő dev Function Appon nincs `AZURE_FUNCTIONS_ENVIRONMENT`] → a publikált host `Production` marad, és az alapfájlt tölti. Ezt a változót ez a change nem állítja be.
 - [Linuxon a fájlnév kis- és nagybetűre érzékeny] → a betöltő csak a kanonikus nevet illeszti a fájlnévbe.
 - [Helyben beállított `WEBSITE_INSTANCE_ID`] → a host nem tölti a User Secrets forrást. A változót az Azure adja; a teszt a döntési függvényt hívja, nem a folyamat változóját írja.
 
 ## Migration Plan
 
-Nincs adatátalakítás és nincs Azure-beállítás. A régi hívók az alapértelmezett `Production` névvel az alapfájlt töltik, amíg a Worker a feloldott nevet át nem adja. Visszavonás: a change kódja és a két JSON fájl kikerül. Titok nem forog, és a telepítő nem fut.
+Nincs adatátalakítás és nincs Azure-beállítás. A régi hívók az alapértelmezett `Production` névvel az alapfájlt töltik, amíg a Worker a feloldott nevet át nem adja. Visszavonás: a change kódja kikerül. Titok nem forog, és a telepítő nem fut.

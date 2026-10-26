@@ -145,15 +145,15 @@ public class WorkerTests
     }
 
     [Fact]
-    public void Test_environment_loads_the_test_nav_url_and_production_keeps_the_base_url()
+    public void Environment_file_overrides_a_setting_and_a_missing_file_keeps_the_base_value()
     {
         var contentRoot = Directory.CreateTempSubdirectory("osapro-worker-env-");
         File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.json"),
-            """{ "Nav": { "BaseUrl": "https://api.onlineszamla.nav.gov.hu" } }""");
+            """{ "Sample": { "Value": "base" } }""");
         File.WriteAllText(
             Path.Combine(contentRoot.FullName, "appsettings.Test.json"),
-            """{ "Nav": { "BaseUrl": "https://api-test.onlineszamla.nav.gov.hu" } }""");
+            """{ "Sample": { "Value": "overlay" } }""");
 
         using var testHost = WorkerComposition.Build(
             contentRoot.FullName,
@@ -161,44 +161,18 @@ public class WorkerTests
             userSecretsId: null,
             includeUserSecrets: false);
         Assert.Equal(HostEnvironment.Test, testHost.Services.GetRequiredService<IHostEnvironment>().EnvironmentName);
-        Assert.Equal(
-            "https://api-test.onlineszamla.nav.gov.hu",
-            testHost.Services.GetRequiredService<IConfiguration>()["Nav:BaseUrl"]);
+        Assert.Equal("overlay", testHost.Services.GetRequiredService<IConfiguration>()["Sample:Value"]);
 
         using var productionHost = WorkerComposition.Build(
             contentRoot.FullName,
             HostEnvironment.Production,
             userSecretsId: null,
             includeUserSecrets: false);
-        Assert.Equal(
-            "https://api.onlineszamla.nav.gov.hu",
-            productionHost.Services.GetRequiredService<IConfiguration>()["Nav:BaseUrl"]);
+        Assert.Equal("base", productionHost.Services.GetRequiredService<IConfiguration>()["Sample:Value"]);
 
         var invoke = WorkerEntry.Plan(["--invoke", FunctionIds.InvoiceProcessing], isDevelopment: false);
         Assert.Null(invoke.FunctionId);
         Assert.True(invoke.StartHost);
-    }
-
-    [Fact]
-    public void Versioned_environment_files_keep_secrets_empty_and_publish_with_the_build()
-    {
-        var workerDirectory = Path.GetDirectoryName(FindVersionedAppSettings())
-            ?? throw new InvalidOperationException("A Worker könyvtára nem olvasható.");
-        var productionFile = File.ReadAllText(FindVersionedAppSettings());
-        var developmentFile = File.ReadAllText(Path.Combine(workerDirectory, "appsettings.Development.json"));
-        var testFile = File.ReadAllText(Path.Combine(workerDirectory, "appsettings.Test.json"));
-
-        Assert.Contains("https://api.onlineszamla.nav.gov.hu", productionFile, StringComparison.Ordinal);
-        Assert.DoesNotContain("https://api-test.onlineszamla.nav.gov.hu", productionFile, StringComparison.Ordinal);
-        Assert.Contains("https://api-test.onlineszamla.nav.gov.hu", developmentFile, StringComparison.Ordinal);
-        Assert.Contains("https://api-test.onlineszamla.nav.gov.hu", testFile, StringComparison.Ordinal);
-        Assert.DoesNotContain("NavLogin", developmentFile, StringComparison.Ordinal);
-        Assert.DoesNotContain("NavLogin", testFile, StringComparison.Ordinal);
-        Assert.False(File.Exists(Path.Combine(workerDirectory, "appsettings.Production.json")));
-
-        var outputDirectory = FindRepoFile(Path.Combine("src", "OsaPro.Worker", "bin", "Debug", "net10.0"));
-        Assert.True(File.Exists(Path.Combine(outputDirectory, "appsettings.Development.json")));
-        Assert.True(File.Exists(Path.Combine(outputDirectory, "appsettings.Test.json")));
     }
 
     private static void AssertLoggedId(string functionId, Action<CapturingLogger> success, Action<CapturingLogger> failure)
