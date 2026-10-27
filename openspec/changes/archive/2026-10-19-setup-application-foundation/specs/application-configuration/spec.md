@@ -14,14 +14,14 @@ A rendszer MUST a titkos konfigurációs értéket verziókezelt fájlon kívül
 - **THEN** az érték nem szerepel verziókezelt fájlban
 
 ### Requirement: Helyi titok betöltése
-A helyben futó OsaPro host MUST a titkos konfigurációs értékeket .NET User Secretsből betölteni.
+A helyben futó host MUST a titkos konfigurációs értékeket .NET User Secretsből betölteni, `Development`, `Test` és `Production` környezetben egyaránt.
 
-#### Scenario: Helyi indítás
-- **WHEN** az OsaPro host helyben indul
+#### Scenario: Helyi Production
+- **WHEN** a host helyben `Production` környezetben indul
 - **THEN** a titkos konfigurációs értékek a .NET User Secretsből töltődnek
 
 ### Requirement: Azure-beli titok betöltése
-Az Azure-ban futó OsaPro host MUST a titkos konfigurációs értékeket Function App Settingsből vagy környezeti változóból betölteni.
+Az Azure-ban futó host MUST a titkos konfigurációs értékeket Function App Settingsből vagy környezeti változóból betölteni, és MUST NOT .NET User Secrets forrást betölteni.
 
 #### Scenario: Azure indítás
 - **WHEN** az OsaPro host Azure-ban indul
@@ -35,5 +35,5 @@ A rendszer MUST a `Secrets` konfigurációs szakasz kulcsait titkos konfiguráci
 - **THEN** a host titkos kulcs nélkül indul
 
 #### Scenario: Megnevezett kulcs
-- **WHEN** a `Secrets` szakasz tartalmazza az `ExcelFile` kulcsnevet
-- **THEN** az `ExcelFile` titkos konfigurációs kulcs, és az értéke nincs verziókezelt fájlban
+- **WHEN** a `Secrets` szakasz tartalmazza az `Excel` kulcsnevet
+- **THEN** az `Excel` titkos konfigurációs kulcs, és az értéke nincs verziókezelt fájlban
