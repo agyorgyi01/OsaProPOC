@@ -20,7 +20,7 @@ A NAV-lekérdezés és az Excel-munkafüzet kezelése kész, de a beérkező biz
 - A `Kapcsolt bizonylatok` mező a módosító és sztornó számlaszámokat pontosvesszővel, szóköz nélkül tartalmazza. A meglévő sorrend megmarad, az új hivatkozás a végére kerül, az ismétlés kimarad. Az `Eredeti számla` csak az eredeti számlaszám. Ismételt szeletnél a már nyilvántartott módosító és sztornó hiányzó hivatkozása is felkerül. Más cella nem változik. Ha az eredeti megvan, új hiányzó-eredeti bejegyzés nem készül, a meglévő marad.
 - Kezelt éven kívüli keltezésnél nincs Excel-sor. A szelet ettől még sikeres lehet, és egy tartós hibabejegyzés készül. Azonossága az adószám és a számlaszám; ismételt futás nem készít másodikat. Tartalma a partnernév, az adószám, a számlaszám, a kelte, a fizetendő összeg, a határidő, és az, hogy a kelte a kezelt éveken kívül van.
 - Hiányzó eredetinél a módosító vagy sztornó sora elkészül, az `Eredeti számla` megkapja az eredeti számlaszámot, és külön hibabejegyzés készül. A szelet sikeres. A bejegyzés később sem vonódik vissza. Azonossága a módosító vagy sztornó saját adószáma és számlaszáma. A tartalom kiegészül az eredeti számlaszámmal és azzal, hogy az eredeti nincs a nyilvántartásban. Ugyanabban a szeletben megtalált eredetihez nem készül bejegyzés, és a kapcsolat felkerül.
-- A tábla sémája, a küldési állapot, az újrapróbálás, a szöveg és a csatorna a `compose-notification-content` change-ben marad.
+- A hibabejegyzés a `notification` táblába kerül, `Type`, `Message`, `Taxnumber`, `Partnername` és `Invoice` mezővel. A típus `Error`. Külön időmező nem készül. A küldési állapot, az újrapróbálás és a csatorna a `compose-notification-content` change-ben marad.
 - Az `ANNUL` továbbra is kívül van. A meglévő teljes ablakos kivonat, az `EnsureMonth`, a környezeti konfiguráció és az infrastruktúra követelményei nem változnak.
 
 ## Capabilities
@@ -31,7 +31,7 @@ A NAV-lekérdezés és az Excel-munkafüzet kezelése kész, de a beérkező biz
 
 ### Modified Capabilities
 
-- Nincs. A kivonatlekérdezés továbbra sem menti az `InsDate` értéket, és a hibás teljes ablak nem ad vissza részleges listát. A munkafüzet biztosítása továbbra sem ír számlasort és nem ír `InsDate` értéket. A konfiguráció sorrendje, a naplózás és az üres `ertesitesek` tábla követelménye nem változik.
+- Nincs új képesség a kivonatlekérdezésen és a munkafüzeten. Az értesítési tábla neve `notification`. A konfiguráció sorrendje és a naplózás nem változik.
 
 ## Impact
 
@@ -47,4 +47,4 @@ Igen. A NAV-integráció, az Excel-nyilvántartás és a bizonylatkapcsolatok. A
 
 - A `RunInvoiceProcessing` munkarésze üres (`src/OsaPro.Worker/FunctionHandlers.cs`). A `--invoke` csak Development környezetben indul (`src/OsaPro.Worker/WorkerEntry.cs`).
 - A teljes ablakos kivonat hibás későbbi szeletnél nem ad részleges listát. A teljes bizonylat külön hívás. Az `EnsureMonth` nem ír számlasort és nem ír `InsDate` értéket.
-- Az `appsettings.json` nem tartalmaz `Processing` szakaszt. Az `ertesitesek` tábla létezik, a sémája nincs rögzítve.
+- Az `appsettings.json` a tervezéskor nem tartalmazott `Processing` szakaszt. Az értesítési tábla neve `notification`.

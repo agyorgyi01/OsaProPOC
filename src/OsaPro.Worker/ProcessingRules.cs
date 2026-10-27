@@ -60,16 +60,6 @@ internal static class ProcessingSlices
     }
 }
 
-internal readonly record struct AmountCell(bool HasValue, decimal Value)
-{
-    public static AmountCell Missing { get; } = new(false, 0);
-
-    public static AmountCell From(decimal? value)
-    {
-        return value is decimal amount ? new AmountCell(true, amount) : Missing;
-    }
-}
-
 internal sealed record InvoiceRowDraft(
     string Partner,
     string TaxNumber,
@@ -79,9 +69,9 @@ internal sealed record InvoiceRowDraft(
     string Related,
     DateOnly IssueDate,
     DateOnly DueDate,
-    AmountCell Gross,
+    decimal? Gross,
     string VatContent,
-    AmountCell VatAmount,
+    decimal? VatAmount,
     string PaymentMethod,
     string InvoicePresent,
     string Paid,
@@ -137,9 +127,9 @@ internal static class InvoiceRows
             "",
             issueDate,
             paymentDate ?? issueDate,
-            AmountCell.From(gross),
+            gross,
             vatContent,
-            AmountCell.From(vatAmount),
+            vatAmount,
             PaymentLabel(paymentMethod),
             "",
             "",

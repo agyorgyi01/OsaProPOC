@@ -34,9 +34,13 @@ if (plan.FunctionId is not null)
     var logger = host.Services
         .GetRequiredService<ILoggerFactory>()
         .CreateLogger("OsaPro.Worker");
-    Action? invoiceWork = plan.FunctionId == FunctionIds.InvoiceProcessing
-        ? () => InvoiceProcessing.RunConfigured(host.Services.GetRequiredService<IConfiguration>()).GetAwaiter().GetResult()
-        : null;
+    Action? invoiceWork = null;
+    if (plan.FunctionId == FunctionIds.InvoiceProcessing)
+    {
+        var configuration = host.Services.GetRequiredService<IConfiguration>();
+        var notifications = TableNotificationLog.Open(configuration["Processing:NotificationTableUri"]);
+        invoiceWork = () => InvoiceProcessing.RunConfigured(configuration, notifications).GetAwaiter().GetResult();
+    }
     return WorkerEntry.Execute(args, startup.IsDevelopment, logger, invoiceWork);
 }
 

@@ -82,7 +82,7 @@ A létrehozás JSON-bemenete MUST a `tenantId`, a `subscriptionId`, a `location`
 - **THEN** a bejelentkezés a bemenet bérlőjét és előfizetését használja, és nem olvassa ki a már bejelentkezett fiókot
 
 ### Requirement: Storage szétválasztás
-A létrehozás MUST három storage-fiókot létrehozni: két hosztfiókot és egy értesítési fiókot. Mindkét hosztfiókon MUST egy `deployment` nevű blobtároló lenni. Az értesítési fiókon ez a tároló MUST NOT lenni. Az értesítési fiók MUST egy üres `ertesitesek` táblát tartalmazni. A hoszt storage MUST letiltani a megosztott kulcsot és a nyilvános blobelérést. A Function App tárolóbeállítása MUST managed identity és a blobszolgáltatás címe lenni.
+A létrehozás MUST három storage-fiókot létrehozni: két hosztfiókot és egy értesítési fiókot. Mindkét hosztfiókon MUST egy `deployment` nevű blobtároló lenni. Az értesítési fiókon ez a tároló MUST NOT lenni. Az értesítési fiók MUST egy üres `notification` táblát tartalmazni. A hoszt storage MUST letiltani a megosztott kulcsot és a nyilvános blobelérést. A Function App tárolóbeállítása MUST managed identity és a blobszolgáltatás címe lenni.
 
 #### Scenario: Két tároló
 - **WHEN** a létrehozás sikeres

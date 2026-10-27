@@ -26,7 +26,7 @@
 
 ## 5. Hibabejegyzés
 
-- [x] 5.1 A bejegyzés azonosságot, okot és a spec tartalmát viszi. Az `Add` ugyanarra az azonosságra nem készít másodikat. Az `ertesitesek` sorába csak ezek a mezők kerülnek. Küldési állapot, újrapróbálás, szöveg és csatorna nincs a sorban. A teszt hamis tárolót használ, táblahívás nélkül. Kezelt éven kívüli tételhez nem készül hiányzó-eredeti bejegyzés. Ellenőrizd: az `OsaPro.Worker.Tests` az ismételt `Add` után egy bejegyzést lát, és a táblasor mezői között nincs küldési állapot, újrapróbálás, szöveg vagy csatorna. A `dotnet test tests/OsaPro.Worker.Tests` sikeres.
+- [x] 5.1 A bejegyzés azonosságot és a spec tartalmát a `Message` mezőben viszi. Az `Add` ugyanarra az azonosságra nem készít másodikat. A `notification` sor `Type` értéke `Error`, a `Message` a tartalom. Éven kívüli és hiányzó eredeti sornál ki van töltve a `Taxnumber`, a `Partnername` és az `Invoice`. Hibás ciklusnál a három mező üres szöveg. Külön időmező nincs, a Table Storage `Timestamp` mezője elég. Küldési állapot, újrapróbálás és csatorna nincs a sorban. A teszt hamis tárolót használ, táblahívás nélkül. Ellenőrizd: az `OsaPro.Worker.Tests` az ismételt `Add` után egy bejegyzést lát, a `Type` értéke `Error`, és a mezők között nincs időbélyeg, küldési állapot, újrapróbálás vagy csatorna. A `dotnet test tests/OsaPro.Worker.Tests` sikeres.
 
 ## 6. Szelet feldolgozása
 

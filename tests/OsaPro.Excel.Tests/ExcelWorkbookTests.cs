@@ -43,7 +43,7 @@ public class ExcelWorkbookTests
         var empty = new GraphDouble();
         empty.Add("SZÁMLÁK2026.xlsx", Parameters("InsDate", "   ", "Előértesítési napok", "7,5,1"));
         using var blocked = Create(empty, [], Options());
-        await Assert.ThrowsAsync<ExcelWorkbookException>(() => blocked.ReadRegistry());
+        await Assert.ThrowsAsync<MissingInsDateException>(() => blocked.ReadRegistry());
         Assert.DoesNotContain(empty.Calls, call => call.Method == "PUT");
 
         var ensured = new GraphDouble();

@@ -81,7 +81,7 @@ resource tableService 'Microsoft.Storage/storageAccounts/tableServices@2023-05-0
 
 resource notificationTable 'Microsoft.Storage/storageAccounts/tableServices/tables@2023-05-01' = {
   parent: tableService
-  name: 'ertesitesek'
+  name: 'notification'
 }
 
 resource functionApp 'Microsoft.Web/sites@2024-04-01' = {

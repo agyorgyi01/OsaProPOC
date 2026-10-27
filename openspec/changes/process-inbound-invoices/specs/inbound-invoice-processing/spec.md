@@ -348,11 +348,15 @@ A bejegyzés MUST tartalmazni az eredeti számlaszámot és azt, hogy az eredeti
 - **THEN** hibabejegyzés nem készül, és az eredeti `Kapcsolt bizonylatok` mezője megkapja a módosító számát
 
 ### Requirement: Hibabejegyzés határa
-A rendszer MUST a hibabejegyzés tartalmát elkészíteni. A tábla sémája, a küldési állapot, az újrapróbálás, az értesítés szövege és a csatorna MUST NOT elkészülni.
+A hibabejegyzés a `notification` táblába kerül. A `Type` értéke `Error`, a `Message` a tartalom. Éven kívüli és hiányzó eredeti sor MUST a bizonylat adataival kitölteni a `Taxnumber`, a `Partnername` és az `Invoice` mezőt. Hibás ciklus sora MUST üres szöveggel írni ezt a három oszlopot. A `Notification` típus későbbi értesítéshez van. Külön időmező MUST NOT készülni. Küldési állapot, újrapróbálás és csatorna MUST NOT készülni.
 
-#### Scenario: Csak a tartalom
-- **WHEN** éven kívüli, hiányzó eredeti vagy hibás ciklus hibabejegyzés készül
-- **THEN** a bejegyzés tartalma megvan, küldési állapot, újrapróbálás, szöveg és csatorna nélkül
+#### Scenario: Számlaszintű tartalom
+- **WHEN** éven kívüli vagy hiányzó eredeti hibabejegyzés készül
+- **THEN** a sor `Type` értéke `Error`, a `Message` tartalmazza a tartalmat, a `Taxnumber`, a `Partnername` és az `Invoice` a bizonylat adata, külön időmező és küldési oszlop nélkül
+
+#### Scenario: Ciklus üres azonossága
+- **WHEN** hibás ciklus hibabejegyzés készül
+- **THEN** a sor `Type` értéke `Error`, a `Message` a leállást tartalmazza, a `Taxnumber`, a `Partnername` és az `Invoice` üres szöveg, az oszlopok a sorban vannak, külön időmező és küldési oszlop nélkül
 
 ### Requirement: Rögzíthető művelet
 A rendszer MUST a `CREATE`, a `MODIFY` és a `STORNO` bizonylatot rögzíteni. Az `ANNUL` MUST NOT számlasorként vagy bizonylatként bekerülni.

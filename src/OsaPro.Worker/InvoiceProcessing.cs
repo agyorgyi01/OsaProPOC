@@ -1,7 +1,4 @@
 using System.Globalization;
-using Azure;
-using Azure.Data.Tables;
-using Azure.Identity;
 using Microsoft.Extensions.Configuration;
 using OsaPro.Excel;
 using OsaPro.NAV;
@@ -41,8 +38,6 @@ internal sealed class ProcessingRun
 {
     public required string? StartDate { get; init; }
 
-    public required string? TableUri { get; init; }
-
     public required DateTimeOffset Now { get; init; }
 
     public required IDigestSource Digest { get; init; }
@@ -50,13 +45,14 @@ internal sealed class ProcessingRun
     public required IInvoiceSource Invoices { get; init; }
 
     public required IRegistryPort Registry { get; init; }
-
-    public required IErrorLog Errors { get; init; }
 }
 
 internal static class InvoiceProcessing
 {
-    public static async Task RunConfigured(IConfiguration configuration, CancellationToken cancellationToken = default)
+    public static async Task RunConfigured(
+        IConfiguration configuration,
+        INotificationLog notifications,
+        CancellationToken cancellationToken = default)
     {
         var now = DateTimeOffset.UtcNow;
         using var navHandler = new HttpClientHandler();
@@ -69,22 +65,23 @@ internal static class InvoiceProcessing
             ExcelOptions.FromConfiguration(configuration),
             excelHandler,
             () => now);
-        var tableUri = configuration["Processing:NotificationTableUri"];
         await Run(
             new ProcessingRun
             {
                 StartDate = configuration["Processing:StartDate"],
-                TableUri = tableUri,
                 Now = now,
                 Digest = new NavDigestSource(query),
                 Invoices = new NavInvoiceSource(query),
-                Registry = new ExcelRegistryPort(workbook),
-                Errors = string.IsNullOrWhiteSpace(tableUri) ? new MemoryErrorLog() : new TableErrorStore(tableUri)
+                Registry = new ExcelRegistryPort(workbook)
             },
+            notifications,
             cancellationToken).ConfigureAwait(false);
     }
 
-    public static async Task Run(ProcessingRun run, CancellationToken cancellationToken = default)
+    public static async Task Run(
+        ProcessingRun run,
+        INotificationLog notifications,
+        CancellationToken cancellationToken = default)
     {
         if (!DateOnly.TryParseExact(
                 run.StartDate,
@@ -96,23 +93,14 @@ internal static class InvoiceProcessing
             throw new ProcessingException("A kezdődátum hiányzik vagy nem yyyy-MM-dd alakú.");
         }
 
-        if (string.IsNullOrWhiteSpace(run.TableUri))
-        {
-            throw new ProcessingException("A NotificationTableUri hiányzik.");
-        }
-
         RegistrySnapshot cursor;
         try
         {
             cursor = await run.Registry.Download(cancellationToken).ConfigureAwait(false);
         }
-        catch (ExcelWorkbookException exception) when (exception.Message.Contains("Az InsDate hiányzik", StringComparison.Ordinal))
+        catch (Exception exception) when (exception is not MissingInsDateException)
         {
-            throw;
-        }
-        catch (Exception)
-        {
-            run.Errors.Add(ErrorRecords.CursorNote());
+            notifications.Add(NotificationRecords.CursorNote());
             throw;
         }
 
@@ -130,13 +118,13 @@ internal static class InvoiceProcessing
                 stage = "excel";
                 var downloaded = await run.Registry.Download(cancellationToken).ConfigureAwait(false);
                 stage = "apply";
-                var edited = await ApplySlice(run, downloaded, items, slice.To, cancellationToken).ConfigureAwait(false);
+                var edited = await ApplySlice(run, notifications, downloaded, items, slice.To, cancellationToken).ConfigureAwait(false);
                 stage = "upload";
                 await run.Registry.Upload(edited, currentYear, cancellationToken).ConfigureAwait(false);
             }
             catch (Exception)
             {
-                run.Errors.Add(ErrorRecords.CycleNote(slice.From, slice.To, stage));
+                notifications.Add(NotificationRecords.CycleNote(slice.From, slice.To, stage));
                 throw;
             }
         }
@@ -144,6 +132,7 @@ internal static class InvoiceProcessing
 
     private static async Task<IReadOnlyList<(int Year, byte[] Bytes)>> ApplySlice(
         ProcessingRun run,
+        INotificationLog notifications,
         RegistrySnapshot snapshot,
         IReadOnlyList<InvoiceDigestItem> items,
         DateTimeOffset sliceEnd,
@@ -189,7 +178,7 @@ internal static class InvoiceProcessing
             var due = item.PaymentDate ?? item.InvoiceIssueDate;
             if (!handled)
             {
-                run.Errors.Add(ErrorRecords.OutOfYearNote(
+                notifications.Add(NotificationRecords.OutOfYearNote(
                     identity,
                     item.SupplierName,
                     item.InvoiceIssueDate,
@@ -236,12 +225,12 @@ internal static class InvoiceProcessing
             var item = items.First(candidate =>
                 InvoiceIdentity.Create(InvoiceRows.TaxNumber(candidate.SupplierTaxNumber), candidate.InvoiceNumber) == identity);
             drafts.TryGetValue(identity, out var draft);
-            run.Errors.Add(ErrorRecords.MissingOriginalNote(
+            notifications.Add(NotificationRecords.MissingOriginalNote(
                 identity,
                 draft?.Partner ?? item.SupplierName,
                 item.InvoiceIssueDate,
                 draft?.DueDate ?? item.PaymentDate ?? item.InvoiceIssueDate,
-                draft is null ? null : draft.Gross.HasValue ? draft.Gross.Value : null,
+                draft?.Gross,
                 item.OriginalInvoiceNumber ?? ""));
         }
 
@@ -331,9 +320,9 @@ internal static class InvoiceProcessing
             draft.Related,
             draft.IssueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             draft.DueDate.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            draft.Gross.HasValue ? draft.Gross.Value.ToString(CultureInfo.InvariantCulture) : "",
+            draft.Gross?.ToString(CultureInfo.InvariantCulture) ?? "",
             draft.VatContent,
-            draft.VatAmount.HasValue ? draft.VatAmount.Value.ToString(CultureInfo.InvariantCulture) : "",
+            draft.VatAmount?.ToString(CultureInfo.InvariantCulture) ?? "",
             draft.PaymentMethod,
             draft.InvoicePresent,
             draft.Paid,
@@ -462,7 +451,7 @@ internal static class InvoiceProcessing
     {
         if (!DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var value))
         {
-            throw new ExcelWorkbookException("Az InsDate hiányzik.");
+            throw new MissingInsDateException();
         }
 
         return value;
@@ -509,53 +498,5 @@ internal sealed class ExcelRegistryPort(ExcelWorkbook workbook) : IRegistryPort
     public Task Upload(IReadOnlyList<(int Year, byte[] Bytes)> files, int currentYear, CancellationToken cancellationToken)
     {
         return workbook.UploadFiles(files.ToDictionary(file => file.Year, file => file.Bytes), currentYear, cancellationToken);
-    }
-}
-
-internal sealed class TableErrorStore : IErrorLog
-{
-    private readonly TableClient _client;
-
-    public TableErrorStore(string tableUri)
-    {
-        var uri = new Uri(tableUri);
-        var account = uri.AbsolutePath.Trim('/');
-        var endpoint = string.Equals(account, "ertesitesek", StringComparison.OrdinalIgnoreCase)
-            ? new Uri($"{uri.Scheme}://{uri.Host}")
-            : uri;
-        _client = new TableClient(endpoint, "ertesitesek", new DefaultAzureCredential());
-    }
-
-    public ErrorNote? Find(string identity)
-    {
-        return null;
-    }
-
-    public void Add(ErrorNote note)
-    {
-        var fields = ErrorRecords.TableFields(note);
-        var entity = new TableEntity(fields["PartitionKey"], fields["RowKey"]);
-        foreach (var pair in fields)
-        {
-            if (pair.Key is "PartitionKey" or "RowKey")
-            {
-                continue;
-            }
-
-            entity[pair.Key] = pair.Value;
-        }
-
-        try
-        {
-            if (_client.GetEntityIfExists<TableEntity>(entity.PartitionKey, entity.RowKey).HasValue)
-            {
-                return;
-            }
-
-            _client.AddEntity(entity);
-        }
-        catch (RequestFailedException exception) when (exception.Status == 409)
-        {
-        }
     }
 }

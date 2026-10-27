@@ -4,7 +4,7 @@
 
 A viselkedés: `specs/inbound-invoice-processing/spec.md`. A motiváció: `proposal.md` - Why.
 
-A `QueryInvoiceDigest` a teljes ablak minden szeletét elkéri, és hibás későbbi szeletnél nem ad vissza listát. A `NavTimestamps.Slices` a következő szeletet 1 ms-mal később kezdi, hogy a meglévő kivonatlekérdezés szeletei ne fedjék egymást. A `QueryInvoiceData` külön hívás. Az `EnsureMonth` fájlt és lapot biztosít, számlasort és `InsDate` értéket nem ír. A `RunInvoiceProcessing` munkarésze üres. A Worker nem hivatkozza a NAV- és az Excel-projektet. Az `ertesitesek` tábla létezik és üres; a küldési séma későbbi change.
+A `QueryInvoiceDigest` a teljes ablak minden szeletét elkéri, és hibás későbbi szeletnél nem ad vissza listát. A `NavTimestamps.Slices` a következő szeletet 1 ms-mal később kezdi, hogy a meglévő kivonatlekérdezés szeletei ne fedjék egymást. A `QueryInvoiceData` külön hívás. Az `EnsureMonth` fájlt és lapot biztosít, számlasort és `InsDate` értéket nem ír. A `RunInvoiceProcessing` munkarésze üres. A Worker nem hivatkozza a NAV- és az Excel-projektet. Az értesítési tábla neve `notification`. A küldési állapot, az újrapróbálás és a csatorna későbbi change.
 
 ## Goals / Non-Goals
 
@@ -18,7 +18,7 @@ A `QueryInvoiceDigest` a teljes ablak minden szeletét elkéri, és hibás kés�
 
 - Időzítő, éles végpont, Slack-küldés, értesítési szöveg, küldési állapot és újrapróbálás.
 - A `NavTimestamps.Slices` átírása és a kanonikus kivonatspec módosítása.
-- Az `ertesitesek` tábla küldési oszlopainak felvétele.
+- A `notification` tábla küldési oszlopainak felvétele.
 
 ## Decisions
 
@@ -64,7 +64,7 @@ Alternatíva: foglalás a NAV-hívás idejére. Elvetve, mert a ciklus letölt, 
 
 ### 5. A hibabejegyzés tartalom, küldési oszlop nélkül
 
-A bejegyzés értéktípus: azonosság, ok, és a specben rögzített mezők. A tároló `Find` és idempotens `Add` művelet. Az Azure-adapter az `ertesitesek` táblába csak ezeket a mezőket írja, managed identityvel. Küldési állapot, újrapróbálás, szöveg és csatorna nem kerül a sorba.
+A bejegyzés kezelése az `INotificationLog` felület, a táblaírás külön osztály. Azonosság, ok és a spec mezői a `Message` szövegébe kerülnek. A `notification` tábla sora `Type`, `Message`, `Taxnumber`, `Partnername` és `Invoice`. Éven kívüli és hiányzó eredeti sor a három azonosságmezőt a bizonylat adataival tölti. Hibás ciklus sora üres szöveggel írja őket. A hibasor típusa `Error`. A `Notification` típus későbbi értesítéshez van. A Table Storage saját `Timestamp` mezőt ad, külön időmező nem készül. Az `Add` ugyanarra az azonosságra nem ír második sort. Küldési állapot, újrapróbálás és csatorna nem kerül a sorba.
 
 A tábla címe a nem titkos `Processing:NotificationTableUri`. A kezdődátum a nem titkos `Processing:StartDate`. Mindkettő a meglévő konfigurációs sorrenddel felülírható. Hiányzó vagy értelmezhetetlen érték a NAV előtt megáll, `InsDate` nélkül. A teszt hamis tárolót kap, táblahívás nélkül.
 

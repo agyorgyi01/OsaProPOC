@@ -12,6 +12,19 @@ public class InvoiceProcessingTests
 {
     private static readonly DateTimeOffset Now = new(2026, 6, 15, 10, 0, 0, TimeSpan.Zero);
 
+    private static readonly string[] ForbiddenFields =
+    [
+        "SendStatus",
+        "RetryCount",
+        "Retry",
+        "Channel",
+        "Timestamp",
+        "TimeStamp",
+        "Küldési állapot",
+        "Újrapróbálás",
+        "Csatorna"
+    ];
+
     [Fact]
     public void Slices_share_the_boundary_and_keep_case_sensitive_identity()
     {
@@ -40,13 +53,13 @@ public class InvoiceProcessingTests
         var missing = InvoiceRows.Build("Partner", "12345678", "SZ-2", null, new DateOnly(2026, 3, 1), null, null, null, null, null, "");
 
         Assert.Equal("12345678", negative.TaxNumber);
-        Assert.Equal(-1500m, negative.Gross.Value);
+        Assert.Equal(-1500m, negative.Gross);
         Assert.Equal("Bankkártya", negative.PaymentMethod);
         Assert.Equal("", negative.InvoicePresent);
         Assert.Equal("", negative.Paid);
         Assert.Equal("", negative.CarOrder);
         Assert.Equal("", negative.Note);
-        Assert.False(missing.Gross.HasValue);
+        Assert.Null(missing.Gross);
         Assert.Equal(new DateOnly(2026, 3, 1), missing.DueDate);
         Assert.Equal("", missing.BankAccount);
         Assert.Equal("", missing.PaymentMethod);
@@ -113,8 +126,8 @@ public class InvoiceProcessingTests
     [Fact]
     public void Error_add_is_idempotent_and_table_fields_have_no_delivery_columns()
     {
-        var log = new MemoryErrorLog();
-        var note = ErrorRecords.OutOfYearNote(
+        var log = new MemoryNotificationLog();
+        var note = NotificationRecords.OutOfYearNote(
             InvoiceIdentity.Create("12345678", "SZ-1"),
             "Partner",
             new DateOnly(2024, 1, 2),
@@ -124,11 +137,16 @@ public class InvoiceProcessingTests
         log.Add(note);
 
         Assert.Single(log.All);
-        var fields = ErrorRecords.TableFields(note);
-        Assert.Equal("A kelte a kezelt éveken kívül van.", fields["Reason"]);
-        Assert.Equal("-1500", fields["PayableAmount"]);
-        Assert.DoesNotContain(fields.Keys, key => ErrorRecords.ForbiddenFields.Contains(key, StringComparer.Ordinal));
-        var outside = ErrorRecords.OutOfYearNote(InvoiceIdentity.Create("12345678", "REGI"), "Partner", new DateOnly(2024, 1, 1), new DateOnly(2024, 1, 1), null);
+        var fields = NotificationRecords.TableFields(note);
+        Assert.Equal(NotificationNote.ErrorType, fields["Type"]);
+        Assert.Equal(TableNotificationLog.TableName, "notification");
+        Assert.Contains("A kelte a kezelt éveken kívül van.", fields["Message"], StringComparison.Ordinal);
+        Assert.Contains("-1500", fields["Message"], StringComparison.Ordinal);
+        Assert.Equal("12345678", fields["Taxnumber"]);
+        Assert.Equal("Partner", fields["Partnername"]);
+        Assert.Equal("SZ-1", fields["Invoice"]);
+        Assert.DoesNotContain(fields.Keys, key => ForbiddenFields.Contains(key, StringComparer.Ordinal));
+        var outside = NotificationRecords.OutOfYearNote(InvoiceIdentity.Create("12345678", "REGI"), "Partner", new DateOnly(2024, 1, 1), new DateOnly(2024, 1, 1), null);
         Assert.DoesNotContain("missing-original", outside.Identity, StringComparison.Ordinal);
     }
 
@@ -148,7 +166,11 @@ public class InvoiceProcessingTests
         Assert.Equal(["excel", "nav", "excel", "upload", "nav"], calls);
         Assert.True(calls.IndexOf("upload") < calls.LastIndexOf("nav"));
         Assert.Single(registry.Errors.All);
-        Assert.Equal("cycle", registry.Errors.All.Single().Kind);
+        Assert.Equal(NotificationNote.ErrorType, registry.Errors.All.Single().Type);
+        Assert.Contains("A ciklus hibával leállt", registry.Errors.All.Single().Message, StringComparison.Ordinal);
+        Assert.Equal("", registry.Errors.All.Single().Taxnumber);
+        Assert.Equal("", registry.Errors.All.Single().Partnername);
+        Assert.Equal("", registry.Errors.All.Single().Invoice);
         Assert.DoesNotContain(calls, call => call.Contains("checkout", StringComparison.Ordinal));
         registry.Errors.Add(registry.Errors.All.Single());
         Assert.Single(registry.Errors.All);
@@ -190,9 +212,9 @@ public class InvoiceProcessingTests
         var digest = new FakeDigest();
         var invoices = new FakeInvoices();
         await Assert.ThrowsAsync<ProcessingException>(() => Run(registry, digest, invoices, Now, startDate: ""));
-        await Assert.ThrowsAsync<ProcessingException>(() => Run(registry, digest, invoices, Now, tableUri: ""));
+        Assert.Throws<ProcessingException>(() => TableNotificationLog.Open(""));
         registry.Files[2025] = ParametersOnly();
-        await Assert.ThrowsAsync<ExcelWorkbookException>(() => Run(registry, digest, invoices, Now));
+        await Assert.ThrowsAsync<MissingInsDateException>(() => Run(registry, digest, invoices, Now));
         Assert.Empty(digest.Calls);
         Assert.Empty(registry.UploadOrder);
     }
@@ -218,9 +240,8 @@ public class InvoiceProcessingTests
         Assert.DoesNotContain("SZ-REGI", Invoices(registry.Files[2026]).Concat(Invoices(registry.Files.GetValueOrDefault(2025) ?? [])));
         Assert.DoesNotContain("SZ-ANNUL", Invoices(registry.Files[2026]));
         Assert.Contains("SZ-UJ", Invoices(registry.Files[2026]));
-        var outside = Assert.Single(registry.Errors.All, note => note.Kind == "out-of-year");
-        Assert.Equal("A kelte a kezelt éveken kívül van.", outside.Reason);
-        Assert.Contains("SZ-REGI", outside.Payload.Values);
+        var outside = Assert.Single(registry.Errors.All, note => note.Message.Contains("kezelt éveken kívül", StringComparison.Ordinal));
+        Assert.Contains("SZ-REGI", outside.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -237,7 +258,7 @@ public class InvoiceProcessingTests
         await Run(registry, digest, invoices, new DateTimeOffset(2026, 1, 20, 12, 0, 0, TimeSpan.Zero));
         Assert.Equal(4, invoices.BatchIndexes.Last());
         Assert.Equal("SZ-2", Related(registry.Files[2026], "EREDETI"));
-        Assert.DoesNotContain(registry.Errors.All, note => note.Kind == "missing-original");
+        Assert.DoesNotContain(registry.Errors.All, note => note.Message.Contains("Az eredeti nincs", StringComparison.Ordinal));
 
         var missingRegistry = Registry();
         var missingDigest = new FakeDigest();
@@ -246,8 +267,8 @@ public class InvoiceProcessingTests
         await Run(missingRegistry, missingDigest, missingInvoices, new DateTimeOffset(2026, 1, 20, 12, 0, 0, TimeSpan.Zero));
         Assert.Equal("NINCS", Original(missingRegistry.Files[2026], "SZ-3"));
         var record = Assert.Single(missingRegistry.Errors.All);
-        Assert.Equal("missing-original", record.Kind);
-        Assert.Equal("NINCS", record.Payload["OriginalInvoiceNumber"]);
+        Assert.Contains("Az eredeti nincs a nyilvántartásban.", record.Message, StringComparison.Ordinal);
+        Assert.Contains("NINCS", record.Message, StringComparison.Ordinal);
         missingDigest.Pages.Clear();
         missingDigest.Pages.Add(_ => [Item("STORNO", "SZ-3", new DateOnly(2026, 1, 12), original: "NINCS")]);
         await Run(missingRegistry, missingDigest, missingInvoices, new DateTimeOffset(2026, 1, 21, 12, 0, 0, TimeSpan.Zero));
@@ -308,7 +329,7 @@ public class InvoiceProcessingTests
 
         Assert.Empty(registry.UploadOrder);
         Assert.Equal(before, registry.Files[2025]);
-        Assert.Single(registry.Errors.All, note => note.Kind == "cycle");
+        Assert.Single(registry.Errors.All, note => note.Type == NotificationNote.ErrorType && note.Message.Contains("A ciklus hibával leállt", StringComparison.Ordinal) && note.Taxnumber == "" && note.Partnername == "" && note.Invoice == "");
         registry.Errors.Add(registry.Errors.All.Single());
         Assert.Single(registry.Errors.All);
     }
@@ -318,21 +339,19 @@ public class InvoiceProcessingTests
         FakeDigest digest,
         FakeInvoices invoices,
         DateTimeOffset now,
-        string? startDate = "2026-01-01",
-        string? tableUri = "https://example.table.core.windows.net")
+        string? startDate = "2026-01-01")
     {
         digest.Log = registry.Trace;
         await InvoiceProcessing.Run(
             new ProcessingRun
             {
                 StartDate = startDate,
-                TableUri = tableUri,
                 Now = now,
                 Digest = digest,
                 Invoices = invoices,
-                Registry = registry,
-                Errors = registry.Errors
-            });
+                Registry = registry
+            },
+            registry.Errors);
     }
 
     private static FakeRegistry Registry(bool withInvoice = false, string related = "")
@@ -512,7 +531,7 @@ public class InvoiceProcessingTests
     {
         public Dictionary<int, byte[]> Files { get; } = [];
 
-        public MemoryErrorLog Errors { get; } = new();
+        public MemoryNotificationLog Errors { get; } = new();
 
         public List<string> Trace { get; } = [];
 

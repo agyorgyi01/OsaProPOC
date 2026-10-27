@@ -376,7 +376,7 @@ internal static class WorkbookFile
 
         if (!insDateSeen || string.IsNullOrWhiteSpace(insDate))
         {
-            throw new ExcelWorkbookException("Az InsDate hiányzik.");
+            throw new MissingInsDateException();
         }
 
         var rows = new List<StoredInvoiceRow>();
@@ -551,7 +551,7 @@ internal static class WorkbookFile
             return;
         }
 
-        throw new ExcelWorkbookException("Az InsDate hiányzik.");
+        throw new MissingInsDateException();
     }
 
     private static WorksheetPart Worksheet(WorkbookPart workbookPart, string name)
