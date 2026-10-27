@@ -337,4 +337,416 @@ internal static class WorkbookFile
 
         return text;
     }
+
+    internal static RegistrySnapshot ReadSnapshot(IReadOnlyDictionary<int, byte[]> files, DateTimeOffset clock)
+    {
+        var current = WorkbookRules.CurrentYear(clock);
+        int? cursorYear = files.ContainsKey(current)
+            ? current
+            : files.ContainsKey(current - 1) ? current - 1 : null;
+        if (cursorYear is null)
+        {
+            return new RegistrySnapshot
+            {
+                HasFile = false,
+                NoticeDays = WorkbookRules.DefaultNoticeDays
+            };
+        }
+
+        var parameters = ReadParameterRows(files[cursorYear.Value]);
+        string? insDate = null;
+        string? noticeDays = null;
+        var insDateSeen = false;
+        if (parameters is not null)
+        {
+            foreach (var (key, value) in parameters)
+            {
+                if (!insDateSeen && WorkbookRules.SameName(key, WorkbookRules.InsDateKey))
+                {
+                    insDateSeen = true;
+                    insDate = WorkbookRules.CopyValue(value);
+                }
+
+                if (noticeDays is null && WorkbookRules.SameName(key, WorkbookRules.NoticeDaysKey))
+                {
+                    noticeDays = WorkbookRules.CopyValue(value);
+                }
+            }
+        }
+
+        if (!insDateSeen || string.IsNullOrWhiteSpace(insDate))
+        {
+            throw new ExcelWorkbookException("Az InsDate hiányzik.");
+        }
+
+        var rows = new List<StoredInvoiceRow>();
+        foreach (var (year, bytes) in files)
+        {
+            rows.AddRange(ReadInvoices(bytes, year));
+        }
+
+        return new RegistrySnapshot
+        {
+            HasFile = true,
+            InsDateText = insDate,
+            NoticeDays = noticeDays ?? WorkbookRules.DefaultNoticeDays,
+            CursorYear = cursorYear.Value,
+            Rows = rows,
+            Files = files
+        };
+    }
+
+    internal static byte[] Apply(byte[]? source, RegistryEdit edit)
+    {
+        var bytes = source ?? Create(edit.Year, edit.SheetMonth, edit.CarriedInsDate, edit.CarriedNoticeDays);
+        var months = edit.NewRows.Select(row => row.Month).ToList();
+        if (edit.WriteInsDate)
+        {
+            months.Add(edit.SheetMonth);
+        }
+
+        foreach (var month in months.Distinct())
+        {
+            bytes = Repair(bytes, month, createParameters: false, insDate: "", noticeDays: "");
+        }
+
+        using var stream = new MemoryStream();
+        stream.Write(bytes);
+        stream.Position = 0;
+        using (var document = SpreadsheetDocument.Open(stream, true))
+        {
+            var workbookPart = document.WorkbookPart ?? throw new ExcelWorkbookException("A munkafüzet hiányzik.");
+            var (dateStyle, numberStyle) = EnsureValueStyles(workbookPart);
+            var table = workbookPart.SharedStringTablePart?.SharedStringTable;
+            foreach (var row in edit.NewRows)
+            {
+                var part = Worksheet(workbookPart, WorkbookRules.MonthName(row.Month));
+                var index = NextDataRow(part.Worksheet, table);
+                WriteInvoiceRow(part.Worksheet, table, index, row.Cells, dateStyle, numberStyle);
+                part.Worksheet.Save();
+            }
+
+            foreach (var link in edit.Links)
+            {
+                WriteLink(workbookPart, table, link);
+            }
+
+            if (edit.WriteInsDate && edit.Year == edit.CurrentYear && !string.IsNullOrWhiteSpace(edit.InsDate))
+            {
+                WriteInsDate(workbookPart, table, edit.InsDate);
+            }
+
+            workbookPart.Workbook.Save();
+        }
+
+        return stream.ToArray();
+    }
+
+    private static IReadOnlyList<StoredInvoiceRow> ReadInvoices(byte[] source, int year)
+    {
+        using var stream = new MemoryStream(source);
+        using var document = SpreadsheetDocument.Open(stream, false);
+        var workbookPart = document.WorkbookPart;
+        var sheets = workbookPart?.Workbook.Sheets;
+        if (workbookPart is null || sheets is null)
+        {
+            return [];
+        }
+
+        var table = workbookPart.SharedStringTablePart?.SharedStringTable;
+        var rows = new List<StoredInvoiceRow>();
+        foreach (var sheet in sheets.Elements<Sheet>())
+        {
+            var month = Array.FindIndex(WorkbookRules.MonthNames, name => WorkbookRules.SameName(name, sheet.Name?.Value));
+            if (month < 0 || sheet.Id is null)
+            {
+                continue;
+            }
+
+            var part = (WorksheetPart)workbookPart.GetPartById(sheet.Id);
+            var map = HeaderMap(part.Worksheet, table);
+            foreach (var row in part.Worksheet.Descendants<Row>())
+            {
+                if (row.RowIndex?.Value is not uint index || index < 2)
+                {
+                    continue;
+                }
+
+                var cells = Values(row, map, table);
+                if (!cells.Any(value => !string.IsNullOrWhiteSpace(value)))
+                {
+                    continue;
+                }
+
+                rows.Add(new StoredInvoiceRow
+                {
+                    Year = year,
+                    Month = month + 1,
+                    RowIndex = index,
+                    Cells = cells
+                });
+            }
+        }
+
+        return rows;
+    }
+
+    private static void WriteLink(WorkbookPart workbookPart, SharedStringTable? table, RegistryLinkWrite link)
+    {
+        var sheets = workbookPart.Workbook.Sheets;
+        if (sheets is null)
+        {
+            return;
+        }
+
+        foreach (var sheet in sheets.Elements<Sheet>())
+        {
+            var month = Array.FindIndex(WorkbookRules.MonthNames, name => WorkbookRules.SameName(name, sheet.Name?.Value));
+            if (month < 0 || sheet.Id is null)
+            {
+                continue;
+            }
+
+            var part = (WorksheetPart)workbookPart.GetPartById(sheet.Id);
+            var map = HeaderMap(part.Worksheet, table);
+            if (!map.TryGetValue("Adószám", out var taxColumn) || !map.TryGetValue("Számlasorszám", out var invoiceColumn))
+            {
+                continue;
+            }
+
+            foreach (var row in part.Worksheet.Descendants<Row>())
+            {
+                var tax = TextAt(row, taxColumn, table).Trim();
+                var invoice = TextAt(row, invoiceColumn, table).Trim();
+                if (!string.Equals(tax, link.TaxNumber.Trim(), StringComparison.Ordinal)
+                    || !string.Equals(invoice, link.InvoiceNumber.Trim(), StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (!map.TryGetValue("Kapcsolt bizonylatok", out var relatedColumn))
+                {
+                    return;
+                }
+
+                Place(row, TextCell(ColumnName(relatedColumn) + row.RowIndex!.Value, link.Related, TextFormatIndex));
+                part.Worksheet.Save();
+                return;
+            }
+        }
+    }
+
+    private static void WriteInsDate(WorkbookPart workbookPart, SharedStringTable? table, string insDate)
+    {
+        var part = Worksheet(workbookPart, WorkbookRules.ParametersSheet);
+        foreach (var row in part.Worksheet.Descendants<Row>())
+        {
+            if (!WorkbookRules.SameName(TextAt(row, 0, table), WorkbookRules.InsDateKey))
+            {
+                continue;
+            }
+
+            Place(row, TextCell(ColumnName(1) + row.RowIndex!.Value, insDate, TextFormatIndex));
+            part.Worksheet.Save();
+            return;
+        }
+
+        throw new ExcelWorkbookException("Az InsDate hiányzik.");
+    }
+
+    private static WorksheetPart Worksheet(WorkbookPart workbookPart, string name)
+    {
+        var sheet = FindSheet(workbookPart.Workbook.Sheets ?? throw new ExcelWorkbookException("A munkafüzet hiányzik."), name)
+            ?? throw new ExcelWorkbookException("A lap nem található.");
+        return (WorksheetPart)workbookPart.GetPartById(sheet.Id!);
+    }
+
+    private static void WriteInvoiceRow(
+        Worksheet worksheet,
+        SharedStringTable? table,
+        uint rowIndex,
+        string[] cells,
+        uint dateStyle,
+        uint numberStyle)
+    {
+        var map = HeaderMap(worksheet, table);
+        var data = worksheet.GetFirstChild<SheetData>() ?? worksheet.InsertAt(new SheetData(), 0);
+        var row = data.Elements<Row>().FirstOrDefault(item => item.RowIndex?.Value == rowIndex);
+        if (row is null)
+        {
+            row = new Row { RowIndex = rowIndex };
+            var next = data.Elements<Row>().FirstOrDefault(item => item.RowIndex?.Value > rowIndex);
+            if (next is null)
+            {
+                data.Append(row);
+            }
+            else
+            {
+                data.InsertBefore(row, next);
+            }
+        }
+
+        for (var index = 0; index < WorkbookRules.Columns.Length && index < cells.Length; index++)
+        {
+            var value = cells[index] ?? "";
+            if (string.IsNullOrWhiteSpace(value) || !map.TryGetValue(WorkbookRules.Columns[index], out var column))
+            {
+                continue;
+            }
+
+            var reference = ColumnName(column) + rowIndex;
+            if (index is 6 or 7 && DateOnly.TryParseExact(value, "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var date))
+            {
+                Place(row, NumberCell(reference, ExcelDate(date).ToString(System.Globalization.CultureInfo.InvariantCulture), dateStyle));
+            }
+            else if (index is 8 or 10 && decimal.TryParse(value, System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var amount))
+            {
+                Place(row, NumberCell(reference, amount.ToString(System.Globalization.CultureInfo.InvariantCulture), numberStyle));
+            }
+            else
+            {
+                Place(row, TextCell(reference, value, TextFormatIndex));
+            }
+        }
+    }
+
+    private static uint NextDataRow(Worksheet worksheet, SharedStringTable? table)
+    {
+        var map = HeaderMap(worksheet, table);
+        uint last = 1;
+        foreach (var row in worksheet.Descendants<Row>())
+        {
+            if (row.RowIndex?.Value is not uint index || index < 2)
+            {
+                continue;
+            }
+
+            if (Values(row, map, table).Any(value => !string.IsNullOrWhiteSpace(value)))
+            {
+                last = Math.Max(last, index);
+            }
+        }
+
+        return last + 1;
+    }
+
+    private static string[] Values(Row row, IReadOnlyDictionary<string, int> map, SharedStringTable? table)
+    {
+        var cells = new string[WorkbookRules.Columns.Length];
+        for (var index = 0; index < WorkbookRules.Columns.Length; index++)
+        {
+            cells[index] = map.TryGetValue(WorkbookRules.Columns[index], out var column)
+                ? TextAt(row, column, table)
+                : "";
+        }
+
+        return cells;
+    }
+
+    private static Dictionary<string, int> HeaderMap(Worksheet worksheet, SharedStringTable? table)
+    {
+        var headers = HeaderRow(worksheet, table);
+        var map = new Dictionary<string, int>(StringComparer.Ordinal);
+        for (var index = 0; index < headers.Count; index++)
+        {
+            foreach (var name in WorkbookRules.Columns)
+            {
+                if (map.ContainsKey(name))
+                {
+                    continue;
+                }
+
+                if (WorkbookRules.SameName(headers[index], name))
+                {
+                    map[name] = index;
+                }
+            }
+        }
+
+        return map;
+    }
+
+    private static void Place(Row row, Cell cell)
+    {
+        var column = ColumnIndex(cell.CellReference!.Value!);
+        var existing = row.Elements<Cell>().FirstOrDefault(item =>
+            item.CellReference?.Value is string reference && ColumnIndex(reference) == column);
+        existing?.Remove();
+        var next = row.Elements<Cell>().FirstOrDefault(item =>
+            item.CellReference?.Value is string reference && ColumnIndex(reference) > column);
+        if (next is null)
+        {
+            row.Append(cell);
+        }
+        else
+        {
+            row.InsertBefore(cell, next);
+        }
+    }
+
+    private static Cell TextCell(string reference, string value, uint style)
+    {
+        return new Cell
+        {
+            CellReference = reference,
+            DataType = CellValues.InlineString,
+            StyleIndex = style,
+            InlineString = new InlineString(Preserve(value))
+        };
+    }
+
+    private static Cell NumberCell(string reference, string value, uint style)
+    {
+        return new Cell
+        {
+            CellReference = reference,
+            StyleIndex = style,
+            CellValue = new CellValue(value)
+        };
+    }
+
+    private static int ExcelDate(DateOnly date)
+    {
+        return date.DayNumber - new DateOnly(1899, 12, 30).DayNumber;
+    }
+
+    private static (uint DateStyle, uint NumberStyle) EnsureValueStyles(WorkbookPart workbookPart)
+    {
+        var stylesPart = workbookPart.WorkbookStylesPart;
+        if (stylesPart?.Stylesheet is null)
+        {
+            stylesPart = workbookPart.AddNewPart<WorkbookStylesPart>();
+            stylesPart.Stylesheet = TextStylesheet();
+        }
+
+        var stylesheet = stylesPart.Stylesheet;
+        var numbering = stylesheet.NumberingFormats ?? stylesheet.InsertAt(new NumberingFormats(), 0);
+        if (!numbering.Elements<NumberingFormat>().Any(item => item.NumberFormatId?.Value == 165))
+        {
+            numbering.Append(new NumberingFormat { NumberFormatId = 165, FormatCode = "0.00" });
+            numbering.Count = (uint)numbering.Elements<NumberingFormat>().Count();
+        }
+
+        var formats = stylesheet.CellFormats ?? stylesheet.AppendChild(new CellFormats());
+        var dateStyle = FindOrAddFormat(formats, 14);
+        var numberStyle = FindOrAddFormat(formats, 165);
+        stylesheet.Save();
+        return (dateStyle, numberStyle);
+    }
+
+    private static uint FindOrAddFormat(CellFormats formats, uint numberFormatId)
+    {
+        var existing = formats.Elements<CellFormat>().ToList();
+        for (var index = 0; index < existing.Count; index++)
+        {
+            if (existing[index].NumberFormatId?.Value == numberFormatId && existing[index].ApplyNumberFormat?.Value == true)
+            {
+                return (uint)index;
+            }
+        }
+
+        formats.Append(new CellFormat { NumberFormatId = numberFormatId, ApplyNumberFormat = true });
+        formats.Count = (uint)formats.Elements<CellFormat>().Count();
+        return formats.Count - 1;
+    }
 }

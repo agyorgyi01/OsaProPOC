@@ -9,7 +9,7 @@ public static class WorkerEntry
 
     public const int Failure = 1;
 
-    public static int Execute(string[] args, bool isDevelopment, ILogger logger)
+    public static int Execute(string[] args, bool isDevelopment, ILogger logger, Action? invoiceWork = null)
     {
         var plan = Plan(args, isDevelopment);
         if (plan.ExitCode != Success)
@@ -19,7 +19,14 @@ public static class WorkerEntry
 
         if (plan.FunctionId == FunctionIds.InvoiceProcessing)
         {
-            FunctionHandlers.RunInvoiceProcessing(logger);
+            if (invoiceWork is null)
+            {
+                FunctionHandlers.RunInvoiceProcessing(logger);
+            }
+            else
+            {
+                FunctionHandlers.RunInvoiceProcessing(logger, invoiceWork);
+            }
         }
         else if (plan.FunctionId == FunctionIds.NotificationComposition)
         {

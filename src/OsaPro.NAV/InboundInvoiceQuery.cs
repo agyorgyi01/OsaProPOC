@@ -34,17 +34,36 @@ public sealed class InboundInvoiceQuery : IDisposable
         var items = new List<InvoiceDigestItem>();
         foreach (var (sliceFrom, sliceTo) in NavTimestamps.Slices(from, to))
         {
-            var page = 1;
-            var availablePage = 1;
-            while (page <= availablePage)
-            {
-                var request = NavRequestEnvelope.Digest(_options, _requestIds(), _clock().ToUniversalTime(), page, sliceFrom, sliceTo);
-                var response = await _sender.PostAsync("queryInvoiceDigest", request, cancellationToken).ConfigureAwait(false);
-                var parsed = ParseDigest(response);
-                availablePage = parsed.AvailablePage;
-                items.AddRange(parsed.Items);
-                page++;
-            }
+            items.AddRange(await ReadDigestPages(sliceFrom, sliceTo, cancellationToken).ConfigureAwait(false));
+        }
+
+        return items;
+    }
+
+    public Task<IReadOnlyList<InvoiceDigestItem>> QueryInvoiceDigestRange(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken = default)
+    {
+        return ReadDigestPages(from, to, cancellationToken);
+    }
+
+    private async Task<IReadOnlyList<InvoiceDigestItem>> ReadDigestPages(
+        DateTimeOffset from,
+        DateTimeOffset to,
+        CancellationToken cancellationToken)
+    {
+        var items = new List<InvoiceDigestItem>();
+        var page = 1;
+        var availablePage = 1;
+        while (page <= availablePage)
+        {
+            var request = NavRequestEnvelope.Digest(_options, _requestIds(), _clock().ToUniversalTime(), page, from, to);
+            var response = await _sender.PostAsync("queryInvoiceDigest", request, cancellationToken).ConfigureAwait(false);
+            var parsed = ParseDigest(response);
+            availablePage = parsed.AvailablePage;
+            items.AddRange(parsed.Items);
+            page++;
         }
 
         return items;

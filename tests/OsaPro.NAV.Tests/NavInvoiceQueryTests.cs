@@ -282,6 +282,41 @@ public class NavInvoiceQueryTests
     }
 
     [Fact]
+    public async Task One_range_reads_every_page_and_a_failed_page_returns_no_list()
+    {
+        var from = new DateTimeOffset(2026, 2, 5, 0, 0, 0, TimeSpan.Zero);
+        var to = new DateTimeOffset(2026, 3, 12, 0, 0, 0, TimeSpan.Zero);
+        var handler = new ScriptedHandler((_, body) =>
+        {
+            var page = Value(XDocument.Parse(body), "page");
+            return page switch
+            {
+                "1" => Xml(DigestResponse(1, 2, Item("CREATE", "SZ-1"))),
+                "2" => Xml(DigestResponse(2, 2, Item("MODIFY", "SZ-2"))),
+                _ => throw new InvalidOperationException(page)
+            };
+        });
+        using var query = Create(handler, [], () => "TESTREQ0001");
+
+        var items = await query.QueryInvoiceDigestRange(from, to, CancellationToken.None);
+
+        Assert.Equal(["SZ-1", "SZ-2"], items.Select(item => item.InvoiceNumber).ToArray());
+        Assert.Equal(2, handler.Bodies.Count);
+        Assert.All(handler.Bodies, body =>
+        {
+            var xml = XDocument.Parse(body);
+            Assert.Equal("2026-02-05T00:00:00.000Z", Value(xml, "dateTimeFrom"));
+            Assert.Equal("2026-03-12T00:00:00.000Z", Value(xml, "dateTimeTo"));
+        });
+
+        var failed = new ScriptedHandler((call, _) => call == 0
+            ? Xml(DigestResponse(1, 2, Item("CREATE", "SZ-1")))
+            : Status(HttpStatusCode.InternalServerError));
+        using var failedQuery = Create(failed, [], () => "TESTREQ0001");
+        await Assert.ThrowsAsync<NavQueryException>(() => failedQuery.QueryInvoiceDigestRange(from, to, CancellationToken.None));
+    }
+
+    [Fact]
     public void Common_namespace_matches_the_vendored_schema()
     {
         var schema = File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.NAV", "Schemas", "common.xsd")));

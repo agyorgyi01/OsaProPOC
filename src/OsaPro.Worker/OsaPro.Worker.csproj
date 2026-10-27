@@ -11,10 +11,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OsaPro.Common\OsaPro.Common.csproj" />
+    <ProjectReference Include="..\OsaPro.NAV\OsaPro.NAV.csproj" />
+    <ProjectReference Include="..\OsaPro.Excel\OsaPro.Excel.csproj" />
     <InternalsVisibleTo Include="OsaPro.Worker.Tests" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Azure.Data.Tables" Version="12.11.0" />
+    <PackageReference Include="Azure.Identity" Version="1.14.2" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.52.0" />
     <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.1.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.13" />

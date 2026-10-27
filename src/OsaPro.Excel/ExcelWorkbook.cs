@@ -52,9 +52,98 @@ public sealed class ExcelWorkbook : IDisposable
         }
     }
 
+    internal async Task<RegistrySnapshot> ReadRegistry(CancellationToken cancellationToken = default)
+    {
+        WorkbookRules.RequireAddress(_options);
+        _year = WorkbookRules.CurrentYear(_clock());
+        _month = WorkbookRules.CurrentMonth(_clock());
+        _file = "";
+        try
+        {
+            var files = await DownloadHandledFiles(cancellationToken).ConfigureAwait(false);
+            return WorkbookFile.ReadSnapshot(files, _clock());
+        }
+        catch (ExcelWorkbookException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw Failed("A művelet sikertelen.", exception);
+        }
+    }
+
+    internal async Task UploadFiles(
+        IReadOnlyDictionary<int, byte[]> files,
+        int currentYear,
+        CancellationToken cancellationToken = default)
+    {
+        WorkbookRules.RequireAddress(_options);
+        _year = currentYear;
+        _month = WorkbookRules.CurrentMonth(_clock());
+        _file = "";
+        try
+        {
+            await Token(cancellationToken).ConfigureAwait(false);
+            var siteId = await SiteId(cancellationToken).ConfigureAwait(false);
+            var folderId = await FolderId(siteId, cancellationToken).ConfigureAwait(false);
+            var children = await Children(siteId, folderId, cancellationToken).ConfigureAwait(false);
+            foreach (var (year, bytes) in files.OrderBy(pair => pair.Key == currentYear).ThenBy(pair => pair.Key))
+            {
+                _year = year;
+                _file = WorkbookRules.FileName(year);
+                var existing = Match(children, _file);
+                if (existing is null)
+                {
+                    var path = EncodeRelative($"{_options.FolderPath}/{_file}");
+                    var url = $"https://{GraphHost}/v1.0/sites/{Uri.EscapeDataString(siteId)}/drive/root:/{path}:/content?@microsoft.graph.conflictBehavior=fail";
+                    using var response = await Send(() => Put(url, bytes), authorize: true, cancellationToken).ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        throw Failed($"A fájl létrehozása nem sikerült. Állapot: {(int)response.StatusCode}.");
+                    }
+                }
+                else
+                {
+                    _file = existing.Name;
+                    await Upload(siteId, existing.Id, bytes, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+        catch (ExcelWorkbookException)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            throw Failed("A művelet sikertelen.", exception);
+        }
+    }
+
     public void Dispose()
     {
         _client.Dispose();
+    }
+
+    private async Task<Dictionary<int, byte[]>> DownloadHandledFiles(CancellationToken cancellationToken)
+    {
+        await Token(cancellationToken).ConfigureAwait(false);
+        var siteId = await SiteId(cancellationToken).ConfigureAwait(false);
+        var folderId = await FolderId(siteId, cancellationToken).ConfigureAwait(false);
+        var children = await Children(siteId, folderId, cancellationToken).ConfigureAwait(false);
+        var files = new Dictionary<int, byte[]>();
+        foreach (var year in new[] { _year, _year - 1 })
+        {
+            var child = Match(children, WorkbookRules.FileName(year));
+            if (child is null)
+            {
+                continue;
+            }
+
+            files[year] = await Download(siteId, child.Id, cancellationToken).ConfigureAwait(false);
+        }
+
+        return files;
     }
 
     private async Task EnsureCore(CancellationToken cancellationToken)

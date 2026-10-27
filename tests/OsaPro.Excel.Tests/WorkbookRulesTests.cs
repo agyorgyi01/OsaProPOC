@@ -154,7 +154,7 @@ public class WorkbookRulesTests
         Assert.Contains("https://api.onlineszamla.nav.gov.hu", json, StringComparison.Ordinal);
         Assert.Contains("info@nexande.com", json, StringComparison.Ordinal);
         Assert.Equal(WorkerComposition.UserSecretsId, "8f4e2c1a-6b7d-4e9f-a1c2-3d4e5f607182");
-        Assert.DoesNotContain("OsaPro.Excel", File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.Worker", "OsaPro.Worker.csproj"))), StringComparison.Ordinal);
+        Assert.Contains("OsaPro.Excel", File.ReadAllText(FindRepoFile(Path.Combine("src", "OsaPro.Worker", "OsaPro.Worker.csproj"))), StringComparison.Ordinal);
     }
 
     private static string FindRepoFile(string relative)

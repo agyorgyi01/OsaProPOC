@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OsaPro.Excel.Tests" />
+    <InternalsVisibleTo Include="OsaPro.Worker" />
+    <InternalsVisibleTo Include="OsaPro.Worker.Tests" />
   </ItemGroup>
 
   <ItemGroup>

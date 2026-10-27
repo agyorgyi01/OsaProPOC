@@ -1,6 +1,8 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using OsaPro.Common;
 using OsaPro.Worker;
 
 var startup = WorkerStartup.Prepare(
@@ -32,7 +34,10 @@ if (plan.FunctionId is not null)
     var logger = host.Services
         .GetRequiredService<ILoggerFactory>()
         .CreateLogger("OsaPro.Worker");
-    return WorkerEntry.Execute(args, startup.IsDevelopment, logger);
+    Action? invoiceWork = plan.FunctionId == FunctionIds.InvoiceProcessing
+        ? () => InvoiceProcessing.RunConfigured(host.Services.GetRequiredService<IConfiguration>()).GetAwaiter().GetResult()
+        : null;
+    return WorkerEntry.Execute(args, startup.IsDevelopment, logger, invoiceWork);
 }
 
 host.Run();

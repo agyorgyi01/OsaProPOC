@@ -69,8 +69,18 @@ internal static class WorkbookRules
 
     public static int CurrentYear(DateTimeOffset clock)
     {
+        return Budapest(clock).Year;
+    }
+
+    public static int CurrentMonth(DateTimeOffset clock)
+    {
+        return Budapest(clock).Month;
+    }
+
+    private static DateTimeOffset Budapest(DateTimeOffset clock)
+    {
         var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Budapest");
-        return TimeZoneInfo.ConvertTime(clock, zone).Year;
+        return TimeZoneInfo.ConvertTime(clock, zone);
     }
 
     public static string DefaultInsDate(int year)

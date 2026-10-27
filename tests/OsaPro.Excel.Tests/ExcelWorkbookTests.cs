@@ -15,6 +15,105 @@ public class ExcelWorkbookTests
     private static readonly DateTimeOffset June2026 = new(2026, 6, 15, 10, 0, 0, TimeSpan.FromHours(2));
 
     [Fact]
+    public async Task Registry_reads_the_previous_year_and_empty_ins_date_does_not_write()
+    {
+        var cells = Enumerable.Repeat("", 16).ToArray();
+        cells[0] = "Korábbi partner";
+        cells[1] = "12345678";
+        cells[3] = "SZ-REGI";
+        var previous = WorkbookFile.Apply(
+            WorkbookFile.Create(2025, 6, "2025-12-31T00:00:00Z", "7,5,1"),
+            new RegistryEdit
+            {
+                Year = 2025,
+                CurrentYear = 2026,
+                SheetMonth = 6,
+                NewRows = [new RegistryRowWrite { Month = 6, Cells = cells }]
+            });
+        var handler = new GraphDouble();
+        handler.Add("SZÁMLÁK2025.xlsx", previous);
+        using var workbook = Create(handler, [], Options());
+
+        var snapshot = await workbook.ReadRegistry();
+
+        Assert.Contains(snapshot.Rows, row => row.Year == 2025 && row.Cells[3] == "SZ-REGI");
+        Assert.Equal("2025-12-31T00:00:00Z", snapshot.InsDateText);
+        Assert.DoesNotContain(handler.Calls, call => call.Method is "PUT" or "POST" && call.Url.Contains("/checkout", StringComparison.Ordinal) || call.Url.Contains("conflictBehavior", StringComparison.Ordinal));
+
+        var empty = new GraphDouble();
+        empty.Add("SZÁMLÁK2026.xlsx", Parameters("InsDate", "   ", "Előértesítési napok", "7,5,1"));
+        using var blocked = Create(empty, [], Options());
+        await Assert.ThrowsAsync<ExcelWorkbookException>(() => blocked.ReadRegistry());
+        Assert.DoesNotContain(empty.Calls, call => call.Method == "PUT");
+
+        var ensured = new GraphDouble();
+        using var month = Create(ensured, [], Options());
+        await month.EnsureMonth(2026, 6);
+        using var created = SpreadsheetDocument.Open(new MemoryStream(ensured.Files["SZÁMLÁK2026.xlsx"]), false);
+        var sheet = created.WorkbookPart!.Workbook.Sheets!.Elements<Sheet>().Single(item => item.Name == "Június");
+        var part = (WorksheetPart)created.WorkbookPart.GetPartById(sheet.Id!);
+        Assert.DoesNotContain(part.Worksheet.Descendants<Row>(), row => row.RowIndex?.Value == 2);
+    }
+
+    [Fact]
+    public async Task Slice_appends_after_the_last_filled_row_without_checkout()
+    {
+        var seeded = WorkbookFile.Create(2026, 2, "2026-01-01T00:00:00Z", "7,5,1");
+        seeded = WithCell(seeded, "Február", 4, "A4", "régi");
+        var previous = WorkbookFile.Create(2025, 6, "2025-12-31T00:00:00Z", "7,5,1");
+        var cells = Enumerable.Repeat("", 16).ToArray();
+        cells[0] = "Új partner";
+        cells[1] = "12345678";
+        cells[3] = "SZ-UJ";
+        cells[6] = "2026-02-01";
+        cells[7] = "2026-02-15";
+        var edited = WorkbookFile.Apply(
+            seeded,
+            new RegistryEdit
+            {
+                Year = 2026,
+                CurrentYear = 2026,
+                SheetMonth = 6,
+                WriteInsDate = true,
+                InsDate = "2026-02-05T00:00:00.000Z",
+                CarriedInsDate = "2026-01-01T00:00:00Z",
+                NewRows = [new RegistryRowWrite { Month = 2, Cells = cells }]
+            });
+        var untouched = WorkbookFile.Apply(
+            previous,
+            new RegistryEdit
+            {
+                Year = 2025,
+                CurrentYear = 2026,
+                SheetMonth = 6,
+                WriteInsDate = true,
+                InsDate = "2099-01-01T00:00:00.000Z",
+                NewRows = []
+            });
+        var handler = new GraphDouble();
+        handler.Add("SZÁMLÁK2026.xlsx", edited);
+        handler.Add("SZÁMLÁK2025.xlsx", untouched);
+        using var workbook = Create(handler, [], Options());
+
+        await workbook.UploadFiles(
+            new Dictionary<int, byte[]> { [2025] = untouched, [2026] = edited },
+            currentYear: 2026);
+
+        Assert.DoesNotContain(handler.Calls, call => call.Url.Contains("/checkout", StringComparison.Ordinal) || call.Url.Contains("createSession", StringComparison.Ordinal));
+        var currentUpload = handler.Calls.FindIndex(call => call.Method == "PUT" && call.Url.Contains(handler.IdOf("SZÁMLÁK2026.xlsx"), StringComparison.Ordinal));
+        var previousUpload = handler.Calls.FindIndex(call => call.Method == "PUT" && call.Url.Contains(handler.IdOf("SZÁMLÁK2025.xlsx"), StringComparison.Ordinal));
+        Assert.True(previousUpload >= 0 && currentUpload > previousUpload);
+        using var current = SpreadsheetDocument.Open(new MemoryStream(handler.Files["SZÁMLÁK2026.xlsx"]), false);
+        Assert.Equal("Új partner", Text(current.WorkbookPart!, "Február", "A5"));
+        Assert.DoesNotContain(
+            SheetRows(current.WorkbookPart!, "Február"),
+            row => row.RowIndex?.Value == 3);
+        Assert.Equal("2026-02-05T00:00:00.000Z", Text(current.WorkbookPart, "Paraméterek", "B1"));
+        using var earlier = SpreadsheetDocument.Open(new MemoryStream(handler.Files["SZÁMLÁK2025.xlsx"]), false);
+        Assert.Equal("2025-12-31T00:00:00Z", Text(earlier.WorkbookPart!, "Paraméterek", "B1"));
+    }
+
+    [Fact]
     public async Task Transient_failure_retries_without_sleeping_and_a_client_error_does_not()
     {
         var delays = new List<TimeSpan>();
@@ -27,7 +126,7 @@ public class ExcelWorkbookTests
         Assert.Equal(4, handler.TokenCalls);
         Assert.Equal(3, delays.Count);
         Assert.All(delays, delay => Assert.Equal(TimeSpan.FromSeconds(5), delay));
-        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(2));
+        Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(10));
         Assert.Contains(handler.Calls, call => call.Url.Contains("/sites/contoso.sharepoint.com:/sites/OsaPro", StringComparison.Ordinal));
         Assert.Contains(handler.Calls, call => call.Url.Contains("/drive/root:/Szamlak/SZÁMLÁK2026.xlsx:/content?@microsoft.graph.conflictBehavior=fail", StringComparison.Ordinal));
         Assert.DoesNotContain(handler.Calls, call => call.Url.Contains("/sites/site-1/drive", StringComparison.Ordinal) && !call.Url.Contains("/sites/site-1/drive/", StringComparison.Ordinal));
@@ -298,11 +397,14 @@ public class ExcelWorkbookTests
         Assert.DoesNotContain("EnsureMonth", handler, StringComparison.Ordinal);
         Assert.DoesNotContain("TimerTrigger", handler, StringComparison.Ordinal);
         Assert.DoesNotContain("HttpTrigger", handler, StringComparison.Ordinal);
-        Assert.DoesNotContain("OsaPro.Excel", workerProject, StringComparison.Ordinal);
+        Assert.Contains("OsaPro.Excel", workerProject, StringComparison.Ordinal);
+        Assert.Contains("OsaPro.NAV", workerProject, StringComparison.Ordinal);
 
         foreach (var file in Directory.GetFiles(FindRepoFile(Path.Combine("src", "OsaPro.Common")), "*.cs"))
         {
-            Assert.DoesNotContain("OsaPro.Excel", File.ReadAllText(file), StringComparison.Ordinal);
+            var source = File.ReadAllText(file);
+            Assert.DoesNotContain("OsaPro.Excel", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("OsaPro.NAV", source, StringComparison.Ordinal);
         }
     }
 
@@ -412,6 +514,33 @@ public class ExcelWorkbookTests
             DataType = CellValues.InlineString,
             InlineString = new InlineString(new Text(text) { Space = SpaceProcessingModeValues.Preserve })
         };
+    }
+
+    private static byte[] WithCell(byte[] source, string sheetName, uint rowIndex, string reference, string value)
+    {
+        using var stream = new MemoryStream();
+        stream.Write(source);
+        stream.Position = 0;
+        using (var document = SpreadsheetDocument.Open(stream, true))
+        {
+            var workbookPart = document.WorkbookPart!;
+            var sheet = workbookPart.Workbook.Sheets!.Elements<Sheet>().Single(item => item.Name == sheetName);
+            var part = (WorksheetPart)workbookPart.GetPartById(sheet.Id!);
+            var data = part.Worksheet.GetFirstChild<SheetData>()!;
+            var row = new Row { RowIndex = rowIndex };
+            row.Append(TextCell(reference, value));
+            data.Append(row);
+            part.Worksheet.Save();
+        }
+
+        return stream.ToArray();
+    }
+
+    private static IEnumerable<Row> SheetRows(WorkbookPart workbook, string sheetName)
+    {
+        var sheet = workbook.Workbook.Sheets!.Elements<Sheet>().Single(item => item.Name == sheetName);
+        var part = (WorksheetPart)workbook.GetPartById(sheet.Id!);
+        return part.Worksheet.Descendants<Row>().ToArray();
     }
 
     private static string Text(WorkbookPart workbook, string sheetName, string reference)

@@ -9,6 +9,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="OsaPro.NAV.Tests" />
+    <InternalsVisibleTo Include="OsaPro.Worker" />
   </ItemGroup>
 
   <ItemGroup>
