@@ -14,7 +14,7 @@ A jelölések jelentése: `project.md`. Az üzleti szabályok: `business-rules.m
 |---|---|
 | Az éves Excel-fájlok havi munkalapjai | Számlaadatok és a felhasználó által kezelt mezők. |
 | Az éves Excel-fájlok `Paraméterek` munkalapja | Felhasználói beállítások és a lekérdezés folytatási pontja (`InsDate`). |
-| Azure Table Storage | Az egyszeri értesítések küldési állapota. |
+| Azure Table Storage | A `notification` tábla: `Payment`, `Document` és `Error` sor. A `NotificationTimestamp` a kiküldés UTC ideje. |
 
 A folytatási pont frissítésének szabálya: `business-rules.md`.
 
@@ -24,11 +24,11 @@ A folytatási pont frissítésének szabálya: `business-rules.md`.
 
 | Function App | Azure Function | Feladat |
 |---|---|---|
-| OsaPro | Számlafeldolgozás | NAV-számlák lekérdezése, Excelbe rögzítése és a bizonylatkapcsolatok kezelése. |
-| OsaPro | Értesítések összeállítása | Fizetési teendők, bizonylatértesítések és hibajelzések összesítése, majd átadása a Slack-küldőnek. |
-| Közös Slack-küldő | Slack-üzenetek küldése | A kapott üzenet elküldése a megadott célra és a küldés eredményének visszajelzése. |
+| OsaPro | Számlafeldolgozás | NAV-számlák lekérdezése, Excelbe rögzítése, `Document` sor és a feldolgozás `Error` sora. |
+| OsaPro | Értesítések összeállítása | Az Excelből `Payment` és `Error` sor a `notification` táblába. Slackot nem hív. |
+| Közös Slack-küldő | Slack-üzenetek küldése | A kapott üzenet elküldése és az eredmény visszajelzése. A táblát nem írja. |
 
-**DECISION** – Az OsaPro két Functionje külön ütemezés szerint fut.
+**DECISION** – Az OsaPro két Functionje külön ütemezés szerint fut. A napi sorrend: számlafeldolgozás, utána értesítés-összeállítás. A hétköznapi összesítőt az OsaPro állítja össze a tábla üres `NotificationTimestamp` értékű soraiból, és a közös küldőnek adja át. Pozitív válasz után az OsaPro írja az elküldött sorok `NotificationTimestamp` mezőjébe az aktuális UTC időt.
 
 **DECISION** – A Slack-küldő külön Azure Function, saját Function Appban. Az OsaPro mellett más alkalmazások is használhatják, több Slack-workspace és csatorna elérésére.
 
@@ -44,7 +44,7 @@ A folytatási pont frissítésének szabálya: `business-rules.md`.
 | SharePointon tárolt Excel | Éves fájlok: számlanyilvántartás a havi munkalapokon, felhasználói beállítások és `InsDate` a `Paraméterek` munkalapon. |
 | Közös Slack-küldő | Az OsaPro által összeállított üzenetek elküldése Slackra. Más alkalmazások is használhatják. |
 | Slack | A felhasználó értesítése egy összesített üzenetben. |
-| Azure Table Storage | Az egyszeri értesítések küldési állapotának tárolása. |
+| Azure Table Storage | A kiküldésre váró `Payment`, `Document` és `Error` sorok. |
 
 Az adatfelelősség: `business-rules.md`. A tárolt adatok bontása a Tech stack táblában van.
 
@@ -52,7 +52,7 @@ Az adatfelelősség: `business-rules.md`. A tárolt adatok bontása a Tech stack
 
 **DECISION** – A számlaadatok útja: NAV Online Számla → OsaPro → SharePoint Excel.
 
-**DECISION** – Az értesítések útja: SharePoint Excel és az egyszeri értesítések tárolója → OsaPro → közös Slack-küldő Function → Slack.
+**DECISION** – Az értesítések útja: NAV és Excel → `notification` tábla → OsaPro összesítő → közös Slack-küldő → Slack. Sikeres küldés után az időpont visszakerül a táblába.
 
 ## Integrációk
 

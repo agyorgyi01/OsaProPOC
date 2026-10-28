@@ -1,4 +1,3 @@
-using System.Globalization;
 using Azure;
 using Azure.Data.Tables;
 using Azure.Identity;
@@ -8,8 +7,6 @@ namespace OsaPro.Worker;
 internal interface INotificationLog
 {
     void Add(NotificationNote note);
-
-    bool HasPaymentOn(DateOnly day);
 }
 
 internal sealed class NotificationNote
@@ -19,8 +16,6 @@ internal sealed class NotificationNote
     public const string DocumentType = "Document";
 
     public const string PaymentType = "Payment";
-
-    public const string IdleType = "Idle";
 
     public const string NotificationType = "Notification";
 
@@ -51,20 +46,6 @@ internal sealed class MemoryNotificationLog : INotificationLog
         }
 
         _notes[note.Identity] = note;
-    }
-
-    public bool HasPaymentOn(DateOnly day)
-    {
-        var prefix = NotificationRecords.DayKey(day) + "|";
-        foreach (var note in _notes.Values)
-        {
-            if (note.Type == NotificationNote.PaymentType && note.Identity.StartsWith(prefix, StringComparison.Ordinal))
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 }
 
@@ -110,13 +91,5 @@ internal sealed class TableNotificationLog : INotificationLog
         catch (RequestFailedException exception) when (exception.Status == 409)
         {
         }
-    }
-
-    public bool HasPaymentOn(DateOnly day)
-    {
-        var prefix = NotificationRecords.DayKey(day) + "|";
-        var next = NotificationRecords.DayKey(day.AddDays(1)) + "|";
-        var filter = $"PartitionKey eq '{NotificationNote.PaymentType}' and RowKey ge '{prefix}' and RowKey lt '{next}'";
-        return _client.Query<TableEntity>(filter, maxPerPage: 1, select: ["RowKey"]).Any();
     }
 }

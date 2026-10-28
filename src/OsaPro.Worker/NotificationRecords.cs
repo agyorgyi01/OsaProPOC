@@ -78,16 +78,6 @@ internal static class NotificationRecords
         return Empty("read|" + DayKey(day), $"A nyilvántartás olvasása megállt: {WorkbookRules.FileName(year)}.");
     }
 
-    public static NotificationNote IdleNote(DateOnly day)
-    {
-        return new NotificationNote
-        {
-            Identity = DayKey(day),
-            Type = NotificationNote.IdleType,
-            Message = "mára nincs teendő, igyál egy kávét"
-        };
-    }
-
     private static NotificationNote Empty(string identity, string message)
     {
         return new NotificationNote

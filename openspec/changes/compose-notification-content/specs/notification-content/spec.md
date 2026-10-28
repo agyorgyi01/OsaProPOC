@@ -7,14 +7,14 @@ A fizetési teendők, a bizonylatértesítések és a hibajelzések összeállí
 ## ADDED Requirements
 
 ### Requirement: Összeállító futás
-Az értesítés-összeállítás MUST a kezelt évek nyilvántartásából fizetési, hiba- és üresnapi sort írni a `notification` táblába. Éles időzítő és élesben hívható végpont MUST NOT készülni. A futás MUST NOT Slack-üzenetet küldeni, MUST NOT NAV-ot hívni, és MUST NOT Excel-fájlt létrehozni vagy módosítani.
+Az értesítés-összeállítás MUST a kezelt évek nyilvántartásából fizetési és hibasort írni a `notification` táblába. Éles időzítő és élesben hívható végpont MUST NOT készülni. A futás MUST NOT Slack-üzenetet küldeni, MUST NOT NAV-ot hívni, és MUST NOT Excel-fájlt létrehozni vagy módosítani.
 
 #### Scenario: Teszt vagy helyi indítás
 - **WHEN** teszt vagy helyi Development indítás elindítja az értesítés-összeállítást
 - **THEN** a futás sort írhat a `notification` táblába, időzítő és éles végpont nélkül, Slack-üzenet és NAV-hívás nélkül, és az Excel-fájlok változatlanok maradnak
 
 ### Requirement: Küldési időpont
-A futás MUST NOT írni és MUST NOT olvasni a `NotificationTimestamp` mezőt. Küldési állapot, újrapróbálás és csatorna MUST NOT készülni. A futás MUST NOT meglévő sort törölni vagy felülírni.
+A `NotificationTimestamp` a kiküldés UTC időpontja. A hétköznapi OsaPro-futás írja, sikeres Slack-válasz után. Ez a futás MUST NOT írni és MUST NOT olvasni a mezőt. Küldési állapot, újrapróbálás és csatorna MUST NOT készülni. A futás MUST NOT meglévő sort törölni vagy felülírni.
 
 #### Scenario: Új fizetési sor
 - **WHEN** a futás fizetési sort ír
@@ -102,7 +102,7 @@ A dátum MUST `yyyy.MM.dd` lenni, és a tényleges `Fiz. határidő`, ennek hiá
 - **THEN** a szöveg dátuma `2026.03.01`
 
 ### Requirement: Fizetési ismétlés
-Egy számlának egy magyarországi naptári napon MUST egy fizetési sora lenni. A következő esedékes napon új sor MUST készülni akkor is, ha az előző sor `NotificationTimestamp` értéke üres. A futás ezt a mezőt MUST NOT használni a döntéshez. Kihagyott napra MUST NOT pótló sor készülni.
+Egy számlának egy magyarországi naptári napon MUST egy fizetési sora lenni. A következő esedékes napon új sor MUST készülni akkor is, ha az előző sor `NotificationTimestamp` értéke üres. Új fizetési sorhoz a futás ezt a mezőt MUST NOT használni. Kihagyott napra MUST NOT pótló sor készülni.
 
 #### Scenario: Ugyanaz a nap
 - **WHEN** a számlának a mai magyar napon már van fizetési sora
@@ -235,11 +235,11 @@ Hiányzó, üres vagy nem `yyyy-MM-dd` kezdődátum esetén egy egyszeri `Error`
 - **THEN** második hiba sor nem készül
 
 ### Requirement: Olvasás a sorok előtt
-A meglévő évi fájlok olvasása MUST befejeződni, mielőtt más sor íródna. Olvasási hibánál csak egy `Error` sor MUST készülni. A `Message` MUST `A nyilvántartás olvasása megállt: SZÁMLÁK{év}.xlsx.` lenni. Az azonosság üres. `Payment` és `Idle` sor MUST NOT készülni. Ha a tárgyévi olvasás hibás, a szöveg a tárgyévi fájlt nevezi. Egyébként az előző évit. Ugyanazon a magyar napon második sor MUST NOT készülni. A következő napon, ha a hiba megmarad, új sor MUST készülni.
+A meglévő évi fájlok olvasása MUST befejeződni, mielőtt más sor íródna. Olvasási hibánál csak egy `Error` sor MUST készülni. A `Message` MUST `A nyilvántartás olvasása megállt: SZÁMLÁK{év}.xlsx.` lenni. Az azonosság üres. `Payment` sor MUST NOT készülni. Ha a tárgyévi olvasás hibás, a szöveg a tárgyévi fájlt nevezi. Egyébként az előző évit. Ugyanazon a magyar napon második sor MUST NOT készülni. A következő napon, ha a hiba megmarad, új sor MUST készülni.
 
 #### Scenario: Egy fájl olvashatatlan
 - **WHEN** az előző évi fájl megvan, de az olvasása sikertelen, a tárgyévi olvasás sikerül
-- **THEN** egy hiba sor készül az előző évi fájl nevével, fizetési és üresnapi sor nem készül
+- **THEN** egy hiba sor készül az előző évi fájl nevével, fizetési sor nem készül
 
 #### Scenario: Mindkét fájl olvashatatlan
 - **WHEN** a tárgyévi és az előző évi olvasás is sikertelen
@@ -249,30 +249,15 @@ A meglévő évi fájlok olvasása MUST befejeződni, mielőtt más sor íródna
 - **WHEN** a hiba ma már kapott sort, és holnap az olvasás még sikertelen
 - **THEN** ma második sor nem készül, holnap új sor készül
 
-### Requirement: Üres hétköznap
-Hétfőtől péntekig, ha az aznapi üzenetek között nincs `Payment` tétel, és aznapi fizetési sor sincs a táblában, egy `Idle` sor MUST készülni. A `Message` MUST `mára nincs teendő, igyál egy kávét` lenni. Naponta egy sor készül, üres azonossággal. `Document` és `Error` sor ettől megmaradhat. Hétvégén, hiányzó fájlnál, hibás kezdődátumnál és olvasási hibánál ilyen sor MUST NOT készülni. Régebbi, kiküldetlen fizetési sor MUST NOT tölteni a napot.
-
-#### Scenario: Nincs fizetési tétel
-- **WHEN** hétfői futásban csak egy `Error` sor készül, és aznapi fizetési sor nincs
-- **THEN** egy `Idle` sor készül a megadott szöveggel, és az `Error` sor megmarad
-
-#### Scenario: Van aznapi fizetési sor
-- **WHEN** a táblában már van a mai napra fizetési sor
-- **THEN** `Idle` sor nem készül
-
-#### Scenario: Megállás
-- **WHEN** a tárgyévi fájl hiányzik
-- **THEN** `Idle` sor nem készül
-
 ### Requirement: Sor mezői
-Számlaszintű sor MUST kitölteni a `Taxnumber`, a `Partnername` és az `Invoice` mezőt a nyilvántartás sora szerint. Az adószám és a számlaszám csak a szélső whitespace-t veszíti el, a kis- és nagybetű megmarad. Fájl-, kezdődátum-, olvasási, előértesítés- és `Idle` sorban ez a három mező MUST üres szöveg lenni.
+Számlaszintű sor MUST kitölteni a `Taxnumber`, a `Partnername` és az `Invoice` mezőt a nyilvántartás sora szerint. Az adószám és a számlaszám csak a szélső whitespace-t veszíti el, a kis- és nagybetű megmarad. Fájl-, kezdődátum-, olvasási és előértesítés-sorban ez a három mező MUST üres szöveg lenni.
 
 #### Scenario: Fizetési sor mezői
 - **WHEN** a számla partnere `Kiss Anna`, az adószáma `12345678`, a száma `Ab-1`
 - **THEN** a fizetési sor `Taxnumber`, `Partnername` és `Invoice` értéke ezek az értékek
 
 #### Scenario: Üres azonosság
-- **WHEN** `Idle` vagy fájlhiba sor készül
+- **WHEN** fájlhiba sor készül
 - **THEN** a `Taxnumber`, a `Partnername` és az `Invoice` üres szöveg
 
 ### Requirement: Meglévő hibasor

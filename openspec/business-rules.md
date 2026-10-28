@@ -102,7 +102,7 @@ A kiegyenlítés automatikus megállapítása és a részkiegyenlítések kezel�
 
 ## Fizetési határidők
 
-**DECISION** – A határidő-ellenőrzés és a Slack-összesítő hétfőtől péntekig, magyarországi idő szerint fut. Ünnepnapnaptárat nem használunk.
+**DECISION** – A számlafeldolgozás és az értesítés-összeállítás minden naptári napon fut, ebben a sorrendben. Szombaton és vasárnap fizetési sor nem készül. A Slack-összesítő hétfőtől péntekig fut, a napi írás után. Ünnepnapnaptárat nem használunk.
 
 **DECISION** – Az előértesítési napokat a felhasználó állítja be, például `7,3,1`. Ezek naptári napokat jelentenek.
 
@@ -110,19 +110,15 @@ A kiegyenlítés automatikus megállapítása és a részkiegyenlítések kezel�
 
 **DECISION** – A határidő napjától a kiegyenlítetlen számla minden hétfőtől péntekig küldött összesítőben szerepel, amíg `FIZETVE` nem lesz, kivéve a sztornóval érintett számlaláncokat.
 
-**DECISION** – Egy számla egy összesítőben csak egyszer szerepelhet.
+**DECISION** – Egy számlának egy magyar napon egy fizetési sora van. A még kiküldetlen korábbi fizetési sorok is bekerülnek az összesítőbe.
 
 ## Slack-értesítések
 
-**DECISION** – Az OsaPro értesítési futásonként egy Slack-összesítőt küld az ügyfél kijelölt csatornájára, akkor is, ha nincs aktuális teendő.
+**DECISION** – Az OsaPro hétköznaponként egy összesítőt ad át a közös Slack-küldőnek. Az összesítő akkor is elmegy, ha nincs `Payment` sor.
 
-**DECISION** – Az összesítő tartalma:
+**DECISION** – Az összesítő az üres `NotificationTimestamp` értékű sorokból áll, három részben. Az első a `Payment` sorok. Ha ilyen sor nincs, a szöveg: `Nincs fizetni való, hátradőlhetsz!` A második a `Document` sorok. A harmadik az `Error` sorok.
 
-- Esedékes és lejárt fizetési tételek, valamint előértesítések.
-- Új `MODIFY` és `STORNO` bizonylatok egyszeri jelzése.
-- Külön figyelmet igénylő esetek és tartós technikai hibák.
-
-**DECISION** – Az egyszeri értesítések küldési állapotát Azure Table Storage tárolja. Sikertelen küldés után az értesítés később újrapróbálható. A fizetési figyelmeztetések minden futáskor az Excel alapján készülnek.
+**DECISION** – Pozitív küldési válasz után az OsaPro az elküldött sorok `NotificationTimestamp` mezőjébe az aktuális UTC időt írja. A közös Slack-küldő a táblát nem írja. Üres mezőnél a sor a következő hétköznapi összesítőben újra szerepel.
 
 **DECISION** – A Slack-értesítésben megjeleníthető személyes adatok köre: `architecture.md`.
 
@@ -131,8 +127,6 @@ A kiegyenlítés automatikus megállapítása és a részkiegyenlítések kezel�
 **DECISION** – A kezelt éveken kívüli számlák, az ismeretlen eredeti számlához tartozó `MODIFY`/`STORNO` és a tartós NAV- vagy Excel-elérési hibák Slack-jelzést kapnak. A kezelt éveken kívüli számlák felvétele a hatókörön kívül van: `project.md`.
 
 **DECISION** – A programhibákat naplózzuk és jelezzük a Slack-összesítőben.
-
-**DECISION** – A sikertelenül kiküldött egyszeri értesítések megmaradnak újrapróbálásra.
 
 **DECISION** – Nem vezetünk Excel-alapú hibanyilvántartást vagy `Hibák` oszlopot.
 
@@ -152,7 +146,7 @@ A kiegyenlítés automatikus megállapítása és a részkiegyenlítések kezel�
 | `Fizetve?` | Felhasználó |
 | `Számla megvan?` | Felhasználó |
 | Előértesítési paraméterek | Felhasználó |
-| Egyszeri értesítések küldési állapota | OsaPro |
+| `notification` sor és `NotificationTimestamp` | OsaPro |
 
 ## Nyitott kérdések
 
@@ -160,7 +154,7 @@ Ezek nem döntések.
 
 **OPEN QUESTION** – Küldjön-e az OsaPro figyelmeztetést, ha a `Számla megvan?` mező üres?
 
-**OPEN QUESTION** – A Slack-üzenet végleges mezői, szövegezése és célcsatornája később pontosítandó. A megjeleníthető személyes adatok köre ettől függetlenül döntött: `architecture.md`.
+**OPEN QUESTION** – A Slack-üzenet célcsatornája és a három rész elrendezése később pontosítandó. A részek sorrendje és a fizetés nélküli mondat döntött. A megjeleníthető személyes adatok: `architecture.md`.
 
 **OPEN QUESTION** – A Slack elérési hibájáról milyen módon történjen értesítés?
 

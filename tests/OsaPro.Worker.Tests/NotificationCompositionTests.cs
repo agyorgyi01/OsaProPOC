@@ -8,10 +8,9 @@ public class NotificationCompositionTests
     private static readonly DateTimeOffset Monday = new(2026, 10, 26, 12, 0, 0, TimeSpan.Zero);
 
     [Fact]
-    public void Keys_keep_case_and_yesterdays_payment_does_not_fill_today()
+    public void Keys_keep_case()
     {
         var today = new DateOnly(2026, 10, 26);
-        var yesterday = today.AddDays(-1);
         var log = new MemoryNotificationLog();
         var document = NotificationRecords.DocumentNote(" Ab-1 ", " Partner ", " Sz-1 ", " Eredeti ", "MODIFY");
         var payment = NotificationRecords.PaymentNote(today, "Ab-1", "Partner", "Sz-1", today, "10,00");
@@ -20,8 +19,6 @@ public class NotificationCompositionTests
         var missing = NotificationRecords.MissingFileNote(2026, currentYear: true);
         var start = NotificationRecords.StartDateNote();
         var read = NotificationRecords.ReadErrorNote(today, 2026);
-        var idle = NotificationRecords.IdleNote(today);
-        var previous = NotificationRecords.PaymentNote(yesterday, "Ab-1", "Partner", "Sz-1", yesterday, "10,00");
 
         Assert.Equal("Ab-1|Sz-1", document.Identity);
         Assert.Equal("Document", document.Type);
@@ -32,25 +29,15 @@ public class NotificationCompositionTests
         Assert.Equal("missing-file|SZÁMLÁK2026.xlsx", missing.Identity);
         Assert.Equal("start-date", start.Identity);
         Assert.Equal("read|2026-10-26", read.Identity);
-        Assert.Equal("2026-10-26", idle.Identity);
-        Assert.Equal("", idle.Taxnumber);
-        Assert.Equal("", idle.Partnername);
-        Assert.Equal("", idle.Invoice);
 
-        foreach (var note in new[] { document, payment, paid, notice, missing, start, read, idle })
+        foreach (var note in new[] { document, payment, paid, notice, missing, start, read })
         {
             Assert.False(NotificationRecords.TableFields(note).ContainsKey("NotificationTimestamp"));
             log.Add(note);
             log.Add(note);
         }
 
-        Assert.Equal(8, log.All.Count);
-        var history = new MemoryNotificationLog();
-        history.Add(previous);
-        history.Add(previous);
-        Assert.Single(history.All);
-        Assert.False(history.HasPaymentOn(today));
-        Assert.True(history.HasPaymentOn(yesterday));
+        Assert.Equal(7, log.All.Count);
     }
 
     [Fact]
@@ -69,8 +56,7 @@ public class NotificationCompositionTests
                 Invoice("Partner", "444", "SZ-5", "2026-10-30", "10", "Készpénz"),
                 Invoice("Partner", "555", "SZ-6", "2026-10-30", "10", "átutalás")
             ],
-            "7,5,1",
-            hasPaymentToday: false);
+            "7,5,1");
 
         var first = Assert.Single(notes, note => note.Invoice == "SZ-1");
         Assert.Equal("SZ-1 fizetés esedékes 2026.10.30, összeg: 1500,50", first.Message);
@@ -93,19 +79,18 @@ public class NotificationCompositionTests
     public void Calendar_shifts_the_weekend_and_collapses_notice_days()
     {
         var sundayDeadline = Invoice("Partner", "111", "SZ-1", "2026-10-25", "10", "Átutalás");
-        var monday = NoticeRules.Compose(Monday, [sundayDeadline], "1,2", false);
+        var monday = NoticeRules.Compose(Monday, [sundayDeadline], "1,2");
         var payment = Assert.Single(monday, note => note.Type == "Payment");
         Assert.StartsWith("2026-10-26|", payment.Identity, StringComparison.Ordinal);
         Assert.Contains("2026.10.25", payment.Message, StringComparison.Ordinal);
 
-        var sunday = NoticeRules.Compose(new DateTimeOffset(2026, 10, 25, 12, 0, 0, TimeSpan.Zero), [sundayDeadline], "7,5,1", false);
-        Assert.DoesNotContain(sunday, note => note.Type is "Payment" or "Idle");
+        var sunday = NoticeRules.Compose(new DateTimeOffset(2026, 10, 25, 12, 0, 0, TimeSpan.Zero), [sundayDeadline], "7,5,1");
+        Assert.DoesNotContain(sunday, note => note.Type == "Payment");
 
         var missed = NoticeRules.Compose(
             new DateTimeOffset(2026, 10, 27, 12, 0, 0, TimeSpan.Zero),
             [Invoice("Partner", "111", "SZ-1", "2026-10-26", "10", "Átutalás")],
-            "7,5,1",
-            false);
+            "7,5,1");
         var tuesday = Assert.Single(missed, note => note.Type == "Payment");
         Assert.StartsWith("2026-10-27|", tuesday.Identity, StringComparison.Ordinal);
         Assert.DoesNotContain(missed, note => note.Identity.StartsWith("2026-10-26|", StringComparison.Ordinal));
@@ -113,12 +98,11 @@ public class NotificationCompositionTests
         var collapsed = NoticeRules.Compose(
             new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero),
             [Invoice("Partner", "111", "SZ-1", "2026-10-30", "10", "Átutalás")],
-            "7, 7, 1",
-            false);
+            "7, 7, 1");
         Assert.Single(collapsed, note => note.Type == "Payment");
         Assert.DoesNotContain(collapsed, note => note.Identity == "notice-days");
 
-        var due = NoticeRules.Compose(new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-1", "2026-10-30", "10", "Átutalás")], "7,0,1", false);
+        var due = NoticeRules.Compose(new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-1", "2026-10-30", "10", "Átutalás")], "7,0,1");
         Assert.Single(due, note => note.Type == "Payment");
         var error = Assert.Single(due, note => note.Identity == "notice-days");
         Assert.Equal("Az Előértesítési napok értéke hibás: 7,0,1.", error.Message);
@@ -128,29 +112,28 @@ public class NotificationCompositionTests
             log.Add(note);
         }
 
-        foreach (var note in NoticeRules.Compose(new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-1", "2026-10-30", "10", "Átutalás")], "9,x", false))
+        foreach (var note in NoticeRules.Compose(new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-1", "2026-10-30", "10", "Átutalás")], "9,x"))
         {
             log.Add(note);
         }
 
         Assert.Equal("Az Előértesítési napok értéke hibás: 7,0,1.", Assert.Single(log.All, note => note.Identity == "notice-days").Message);
 
-        var early = NoticeRules.Compose(new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-9", "2026-10-30", "10", "Átutalás")], "7", false);
-        var onDay = NoticeRules.Compose(new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-9", "2026-10-30", "10", "Átutalás")], "7", false);
-        var late = NoticeRules.Compose(new DateTimeOffset(2026, 11, 2, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-9", "2026-10-30", "10", "Átutalás")], "7", false);
+        var early = NoticeRules.Compose(new DateTimeOffset(2026, 10, 23, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-9", "2026-10-30", "10", "Átutalás")], "7");
+        var onDay = NoticeRules.Compose(new DateTimeOffset(2026, 10, 30, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-9", "2026-10-30", "10", "Átutalás")], "7");
+        var late = NoticeRules.Compose(new DateTimeOffset(2026, 11, 2, 12, 0, 0, TimeSpan.Zero), [Invoice("Partner", "111", "SZ-9", "2026-10-30", "10", "Átutalás")], "7");
         Assert.Equal(early.Single(note => note.Type == "Payment").Message, onDay.Single(note => note.Type == "Payment").Message);
         Assert.Equal(onDay.Single(note => note.Type == "Payment").Message, late.Single(note => note.Type == "Payment").Message);
 
         var budapestMonday = NoticeRules.Compose(
             new DateTimeOffset(2026, 10, 25, 23, 30, 0, TimeSpan.Zero),
             [Invoice("Partner", "111", "SZ-8", "2026-10-26", "10", "Átutalás")],
-            "7,5,1",
-            false);
+            "7,5,1");
         Assert.Contains(budapestMonday, note => note.Type == "Payment" && note.Identity.StartsWith("2026-10-26|", StringComparison.Ordinal));
 
         var history = new MemoryNotificationLog();
         history.Add(NotificationRecords.PaymentNote(new DateOnly(2026, 10, 26), "111", "Partner", "SZ-1", new DateOnly(2026, 10, 25), "10,00"));
-        foreach (var note in NoticeRules.Compose(new DateTimeOffset(2026, 10, 27, 12, 0, 0, TimeSpan.Zero), [sundayDeadline], "7,5,1", false))
+        foreach (var note in NoticeRules.Compose(new DateTimeOffset(2026, 10, 27, 12, 0, 0, TimeSpan.Zero), [sundayDeadline], "7,5,1"))
         {
             history.Add(note);
         }
@@ -171,8 +154,7 @@ public class NotificationCompositionTests
                 Invoice("Partner", "999", "MASIK", "2026-10-26", "10", "Átutalás", original: "EREDETI"),
                 Invoice("Partner", "111", "KESZPENZ", "2026-10-26", "10", "Készpénz", paid: "X")
             ],
-            "7,5,1",
-            false);
+            "7,5,1");
         Assert.DoesNotContain(chained, note => note.Type == "Payment" && note.Invoice is "EREDETI" or "SZ-1" or "SZ-3");
         Assert.Contains(chained, note => note.Type == "Payment" && note.Invoice == "KIVUL");
         Assert.Contains(chained, note => note.Type == "Payment" && note.Invoice == "MASIK");
@@ -188,50 +170,10 @@ public class NotificationCompositionTests
                 Invoice("Partner", "111", "SZ-1", "2026-10-26", "10", "Átutalás", original: "EREDETI"),
                 Invoice("Partner", "111", "SZ-3", "2026-10-26", "10", "Átutalás", original: "EREDETI")
             ],
-            "7,5,1",
-            false);
+            "7,5,1");
         Assert.Contains(open, note => note.Type == "Payment" && note.Invoice == "EREDETI");
         Assert.Contains(open, note => note.Type == "Payment" && note.Invoice == "SZ-1");
         Assert.Contains(open, note => note.Type == "Payment" && note.Invoice == "SZ-3");
-    }
-
-    [Fact]
-    public void Idle_row_is_written_on_a_weekday_without_payment()
-    {
-        var errorDay = NoticeRules.Compose(
-            Monday,
-            [Invoice("Partner", "111", "SZ-1", "2026-10-26", "10", "Készpénz", paid: "ROSSZ")],
-            "7,5,1",
-            false);
-        Assert.Contains(errorDay, note => note.Type == "Error");
-        var idle = Assert.Single(errorDay, note => note.Type == "Idle");
-        Assert.Equal("mára nincs teendő, igyál egy kávét", idle.Message);
-        Assert.Equal("2026-10-26", idle.Identity);
-        Assert.Equal("", idle.Taxnumber);
-
-        var blocked = NoticeRules.Compose(
-            Monday,
-            [Invoice("Partner", "111", "SZ-1", "2026-10-26", "10", "Készpénz", paid: "ROSSZ")],
-            "7,5,1",
-            hasPaymentToday: true);
-        Assert.DoesNotContain(blocked, note => note.Type == "Idle");
-
-        var yesterday = new DateOnly(2026, 10, 25);
-        var log = new MemoryNotificationLog();
-        log.Add(NotificationRecords.PaymentNote(yesterday, "111", "Partner", "SZ-1", yesterday, "10,00"));
-        log.Add(NotificationRecords.DocumentNote("111", "Partner", "SZ-9", "EREDETI", "MODIFY"));
-        Assert.False(log.HasPaymentOn(new DateOnly(2026, 10, 26)));
-        foreach (var note in NoticeRules.Compose(Monday, [], "7,5,1", log.HasPaymentOn(new DateOnly(2026, 10, 26))))
-        {
-            log.Add(note);
-        }
-
-        Assert.Contains(log.All, note => note.Type == "Idle");
-        Assert.Contains(log.All, note => note.Type == "Document");
-        Assert.Contains(log.All, note => note.Type == "Payment" && note.Identity.StartsWith("2026-10-25|", StringComparison.Ordinal));
-
-        var weekend = NoticeRules.Compose(new DateTimeOffset(2026, 10, 25, 12, 0, 0, TimeSpan.Zero), [], "7,5,1", false);
-        Assert.DoesNotContain(weekend, note => note.Type == "Idle");
     }
 
     [Fact]
@@ -245,7 +187,6 @@ public class NotificationCompositionTests
         Assert.Equal("start-date", start.Identity);
         Assert.Equal("A kezdődátum hiányzik vagy hibás.", start.Message);
         Assert.Equal("", start.Taxnumber);
-        Assert.DoesNotContain(log.All, note => note.Type == "Idle");
 
         var current = Workbook(2026, "7,5,1", Row("SZ-1", "2026-10-26", "1500.5"));
         var startup = new MemoryNotificationLog();
@@ -285,7 +226,6 @@ public class NotificationCompositionTests
         var missingPrevious = Assert.Single(later.All);
         Assert.Equal("missing-file|SZÁMLÁK2026.xlsx", missingPrevious.Identity);
         Assert.Equal("Az előző évi nyilvántartás hiányzik: SZÁMLÁK2026.xlsx. A feldolgozás megállt.", missingPrevious.Message);
-        Assert.DoesNotContain(later.All, note => note.Type == "Idle");
 
         var absent = new MemoryNotificationLog();
         await NotificationComposition.Run(
@@ -318,7 +258,7 @@ public class NotificationCompositionTests
         var failure = Assert.Single(log.All, note => note.Identity == "read|2026-10-26");
         Assert.Equal("A nyilvántartás olvasása megállt: SZÁMLÁK2026.xlsx.", failure.Message);
         Assert.Equal("", failure.Taxnumber);
-        Assert.DoesNotContain(log.All, note => note.Type is "Payment" or "Idle");
+        Assert.DoesNotContain(log.All, note => note.Type == "Payment");
         Assert.Equal(existing.Message, Assert.Single(log.All, note => note.Identity == existing.Identity).Message);
 
         await NotificationComposition.Run("2026-01-01", new DateTimeOffset(2026, 10, 27, 12, 0, 0, TimeSpan.Zero), source, log);

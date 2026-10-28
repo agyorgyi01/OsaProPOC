@@ -662,9 +662,5 @@ public class InvoiceProcessingTests
             }
         }
 
-        public bool HasPaymentOn(DateOnly day)
-        {
-            return false;
-        }
     }
 }

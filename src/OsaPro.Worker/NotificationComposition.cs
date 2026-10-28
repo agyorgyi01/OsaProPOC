@@ -102,7 +102,7 @@ internal static class NotificationComposition
             }
         }
 
-        foreach (var note in NoticeRules.Compose(now, invoices, read.NoticeDays, notifications.HasPaymentOn(today)))
+        foreach (var note in NoticeRules.Compose(now, invoices, read.NoticeDays))
         {
             notifications.Add(note);
         }

@@ -35,8 +35,7 @@ internal static class NoticeRules
     public static IReadOnlyList<NotificationNote> Compose(
         DateTimeOffset now,
         IReadOnlyList<NoticeInvoice> invoices,
-        string? noticeDays,
-        bool hasPaymentToday)
+        string? noticeDays)
     {
         var today = WorkbookRules.CurrentDate(now);
         var weekend = today.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
@@ -85,11 +84,6 @@ internal static class NoticeRules
                 number,
                 due.Value,
                 FormatAmount(invoice.Amount)));
-        }
-
-        if (!weekend && !notes.Exists(note => note.Type == NotificationNote.PaymentType) && !hasPaymentToday)
-        {
-            notes.Add(NotificationRecords.IdleNote(today));
         }
 
         return notes;

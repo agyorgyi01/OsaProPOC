@@ -26,13 +26,13 @@ Az `ertesites-osszeallitas` belépés megvan, a munkája üres. A `Program.cs` c
 
 A számlafeldolgozás a `MODIFY` és a `STORNO` új számlasoránál `Document` sort ír, ugyanott, ahol a többi bejegyzés készül, a feltöltés előtt. A `CREATE` nem kap ilyet. Már ismert számla nem kap utólagos sort. A táblahiba a szeletet a feltöltés előtt állítja meg. Sikeres bejegyzés és sikertelen feltöltés után az ismétlés a 409 miatt nem ír második `Document` sort.
 
-Az összeállítás csak `Payment`, `Error` és `Idle` sort ír. A `Program.cs` az `ertesites-osszeallitas` ágon nyitja a táblát és az Excel-olvasót. Új trigger nem készül.
+Az összeállítás csak `Payment` és `Error` sort ír. A `Program.cs` az `ertesites-osszeallitas` ágon nyitja a táblát és az Excel-olvasót. Új trigger nem készül.
 
 Alternatíva: az összeállítás pótolja a régi `Document` sorokat. Elvetve, mert a spec az utólagos sort tiltja. Alternatíva: a művelet külön táblasor. Elvetve, mert a küldő minden sort olvasna.
 
 ### 2. A szabály tiszta, az olvasás nem hoz létre fájlt
 
-Az esedékesség, a szöveg, a sztornólánc és az üres nap döntése tiszta függvény. Bemenete a mai magyar dátum, a beolvasott sorok, a tárgyévi előértesítés és az, hogy a mai napra van-e már `Payment` sor. Nem hív Graphot és táblát.
+Az esedékesség, a szöveg és a sztornólánc tiszta függvény. Bemenete a mai magyar dátum, a beolvasott sorok és a tárgyévi előértesítés. Nem hív Graphot és táblát.
 
 Az olvasó a mappa gyermekeit nézi, és csak a meglevő évi fájlt tölti le. Az `EnsureMonth` nem fut. A `ReadSnapshot` előértesítés-visszaesése nem dönt: hiányzó tárgyévi fájl hiba és megállás, nem az előző év `7,5,1` helyett használt listája. Üres, hiányzó kulcs vagy hiányzó `Paraméterek` lap a tárgyévi fájlban `7,5,1`.
 
@@ -51,11 +51,10 @@ A `PartitionKey` a `Type`. A `RowKey` ettől független, hogy az üres azonossá
 - hiányzó fájl: `missing-file|{fájlnév}`
 - hibás kezdődátum: `start-date`
 - olvasási hiba: `read|{magyar nap}`
-- `Idle`: `{magyar nap}`
 
-Az adószám és a számlaszám csak a szélső whitespace-t veszíti el, sorrendi összehasonlítással. Nem a `WorkbookRules.Identity` nagybetűsítése. A `Payment` kulcs a nappal kezdődik, ezért a mai sorok egy tartománnyal látszanak. Az üres nap ezt nézi, a `NotificationTimestamp` mezőt nem. Régebbi fizetési sor nem tölti a napot. Az `Add` továbbra sem ír felül: a `notice-days` kulcs egy sor, későbbi más hibás érték sem cseréli le és nem kap másodikat.
+Az adószám és a számlaszám csak a szélső whitespace-t veszíti el, sorrendi összehasonlítással. Nem a `WorkbookRules.Identity` nagybetűsítése. A `Payment` kulcs a nappal kezdődik, ezért egy számlának naponta egy sora van. Az `Add` továbbra sem ír felül: a `notice-days` kulcs egy sor, későbbi más hibás érték sem cseréli le és nem kap másodikat.
 
-A `NotificationTimestamp` nincs a kiírt mezők között. A tábla saját `Timestamp` mezője nem ez. Küldési állapot, újrapróbálás és csatorna nem kerül a sorba.
+A `NotificationTimestamp` a kiküldés UTC időpontja. A hétköznapi futás írja, sikeres Slack-válasz után. Ez a futás nem olvassa és nem írja. Új fizetési sorhoz a mező nem számít. A tábla saját `Timestamp` mezője nem ez. Küldési állapot, újrapróbálás és csatorna nem kerül a sorba.
 
 Alternatíva: a nap a `Payment` kulcs végén. Elvetve, mert a mai sorok úgy nem egy tartomány. Alternatíva: üres `RowKey` minden nem számlaszintű hibánál. Elvetve, mert egy sor felülírná a másikat.
 
@@ -81,8 +80,7 @@ Alternatíva: a `Fizetve?` is trimelés után egyezik. Elvetve, mert a spec a po
 - [A `Document` sor a feltöltés előtt készül] → sikertelen feltöltés után az ismétlés nem ír második sort, a számlasor a következő sikeres szeletben megjön.
 - [A feltöltés sikerül, a `Document` írás mégsem] → a szelet a feltöltés előtt áll, ezért a számlasor sem kerül fel. Már fent lévő számlához nincs pótlás.
 - [A `notice-days` egyetlen kulcs] → más hibás érték nem kap új sort, a régi szöveg marad.
-- [A mai `Payment` sorok lekérdezése] → csak a mai nap előtagú kulcsok kellenek, a `NotificationTimestamp` nem.
 
 ## Migration Plan
 
-Új Azure-erőforrás nincs. A `notification` tábla és a `Processing:NotificationTableUri` marad. Az első összeállítás a meglévő Excelből írhat `Payment`, `Error` és `Idle` sort. `Document` sort csak a change után rögzített `MODIFY` és `STORNO` kap. Visszalépésnél a már kiírt sorok maradnak. A program nem töröl sort, és a régi `Kapcsolt bizonylatok` értéket nem írja vissza.
+Új Azure-erőforrás nincs. A `notification` tábla és a `Processing:NotificationTableUri` marad. Az első összeállítás a meglévő Excelből írhat `Payment` és `Error` sort. `Document` sort csak a change után rögzített `MODIFY` és `STORNO` kap. Visszalépésnél a már kiírt sorok maradnak. A program nem töröl sort, és a régi `Kapcsolt bizonylatok` értéket nem írja vissza.

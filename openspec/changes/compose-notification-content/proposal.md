@@ -2,12 +2,12 @@
 
 ## Why
 
-A számlafeldolgozás rögzíti a bizonylatokat és a hibákat. A fizetési teendő, a bizonylatértesítés és a hibajelzés még nincs a `notification` táblában. A későbbi Slack-küldő ezt a táblát olvassa.
+A számlafeldolgozás rögzíti a bizonylatokat és a hibákat. A fizetési teendő, a bizonylatértesítés és a hibajelzés még nincs a `notification` táblában. A későbbi hétköznapi OsaPro-futás olvassa a táblát, és egy üzenetet ad a közös Slack-küldőnek.
 
 ## What Changes
 
-- Az `ertesites-osszeallitas` futás a kezelt évek Excel-fájljait olvassa, és `Payment`, `Error` meg `Idle` sort ír a `notification` táblába. Teszt és Development `--invoke` indítja. Időzítő, éles végpont, NAV-hívás és Slack-küldés nincs. Az ütemezés a `schedule-and-orchestrate`, a küldés a `build-shared-slack-sender` és az `integrate-slack-sender` change-ben marad.
-- A `NotificationTimestamp` a kiküldés UTC ideje. Ez a change nem írja és nem olvassa. Küldési állapot, újrapróbálás és csatorna nem készül.
+- Az `ertesites-osszeallitas` futás a kezelt évek Excel-fájljait olvassa, és `Payment` és `Error` sort ír a `notification` táblába. Teszt és Development `--invoke` indítja. Időzítő, éles végpont, NAV-hívás és Slack-küldés nincs. Az ütemezés a `schedule-and-orchestrate`, a küldés a `build-shared-slack-sender` és az `integrate-slack-sender` change-ben marad.
+- A `NotificationTimestamp` a kiküldés UTC ideje. A hétköznapi futás írja, sikeres Slack-válasz után. Ez a change nem írja és nem olvassa. Küldési állapot, újrapróbálás és csatorna nem készül.
 - A `MODIFY` és a `STORNO` `Document` sorát a számlafeldolgozás írja, amikor a számlasort létrehozza. Az összeállítás nem pótolja a már tárolt bizonylatot, és a `CREATE` nem kap bizonylatsort. A `MODIFY` szövege: `{eredeti számlaszám} módosítása érkezett, számlaszám: {számlaszám}`. A `STORNO` szövege: `{eredeti számlaszám} sztornózás érkezett, számlaszám: {számlaszám}`. Ugyanarra a számlára második sor nem készül.
 - Új Excel-oszlop és külön műveleti sor nincs. Az új sztornó a `Kapcsolt bizonylatok` végére `STORNO:{számlaszám}` alakban kerül. A módosító előtag nélkül kerül a végére. A régi, előtag nélküli érték marad, és nem sztornólánc.
 - Fizetési sor csak `Átutalás` esetén készül, típusa `Payment`. Szövege előértesítésnél, határidőnapon és lejárt tételnél is: `{számlaszám} fizetés esedékes {fizetési határidő}, összeg: {számla bruttó összeg}`. A dátum `yyyy.MM.dd`. Az összeg két tizedes, tizedesvessző, ezres tagolás és pénznem nélkül. Hiányzó összegnél a sor megmarad, az összeg helye üres. A mínusz előjel megmarad.
@@ -16,8 +16,7 @@ A számlafeldolgozás rögzíti a bizonylatokat és a hibákat. A fizetési teen
 - A `Fizetve?` csak pontosan `FIZETVE` esetén kiegyenlített. Az üres cella kiegyenlítetlen. Más érték kiegyenlítetlen, és egyszeri hiba: `{számlaszám} Fizetve? értéke hibás: {érték}. Kiegyenlítetlenként kezeljük.` Átutalásnál a fizetési sor is elkészül. Más fizetési módnál és sztornóláncban csak a hiba sor készül. A `Számla megvan?` cella nem készít értesítést.
 - Hiányzó tárgyévi fájl, üres azonossággal: `A tárgyévi nyilvántartás hiányzik: SZÁMLÁK{év}.xlsx. A feldolgozás megállt.` A futás megáll, a fájl nem jön létre, más sor nincs. Az indulás éve a `Processing:StartDate` éve. Ebben az évben a hiányzó előző év nem hiba; ha a fájl megvan, a számlái beleszámítanak. Későbbi évben: `Az előző évi nyilvántartás hiányzik: SZÁMLÁK{év}.xlsx. A feldolgozás megállt.`
 - Hibás kezdődátum Excel-olvasás nélkül, üres azonossággal: `A kezdődátum hiányzik vagy hibás.` Olvasási hibánál mindkét meglevő fájl olvasása lefut, majd egy `Error` sor készül: `A nyilvántartás olvasása megállt: SZÁMLÁK{év}.xlsx.` Ugyanazon a napon második sor nincs. A következő napon, ha a hiba megmarad, új sor készül. Ilyenkor `Document` és `Payment` sor nincs.
-- Hétköznap, ha nincs aznapi `Payment` tétel, egy üres azonosságú `Idle` sor készül: `mára nincs teendő, igyál egy kávét.` Hétvégén és a fenti megállásoknál ilyen sor nincs. A már meglévő aznapi fizetési sor nem üres nap. `Document` és `Error` sor mellett az `Idle` sor megmaradhat.
-- A számlaszintű sor tölti a `Taxnumber`, `Partnername` és `Invoice` mezőt. A fájl-, kezdődátum-, olvasási, előértesítés- és `Idle` sorban ezek üresek. Az `ANNUL` nem kap sort. A számlafeldolgozás meglévő `Error` sorai megmaradnak.
+- A számlaszintű sor tölti a `Taxnumber`, `Partnername` és `Invoice` mezőt. A fájl-, kezdődátum-, olvasási és előértesítés-sorban ezek üresek. Az `ANNUL` nem kap sort. A számlafeldolgozás meglévő `Error` sorai megmaradnak.
 
 ## Capabilities
 
