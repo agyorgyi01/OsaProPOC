@@ -22,7 +22,8 @@ public class InvoiceProcessingTests
         "TimeStamp",
         "Küldési állapot",
         "Újrapróbálás",
-        "Csatorna"
+        "Csatorna",
+        "NotificationTimestamp"
     ];
 
     [Fact]
@@ -121,6 +122,90 @@ public class InvoiceProcessingTests
         Assert.Equal("SZ-1;SZ-2", retry.Updates.Single().Related);
         Assert.Empty(retry.Missing);
         Assert.Equal("SZ-1;SZ-2", InvoiceLinks.Append("SZ-1;SZ-2", "SZ-2"));
+    }
+
+    [Fact]
+    public async Task Storno_reference_is_prefixed_and_an_existing_number_is_kept()
+    {
+        var original = new TrackedInvoice { Year = 2026, TaxNumber = "12345678", InvoiceNumber = "EREDETI", Related = "SZ-1" };
+        var added = InvoiceLinks.Decide(
+            [original],
+            [new SliceLinkItem { Operation = "STORNO", TaxNumber = "12345678", InvoiceNumber = "SZ-3", OriginalInvoiceNumber = "EREDETI" }]);
+        Assert.Equal("SZ-1;STORNO:SZ-3", added.Updates.Single().Related);
+
+        var stored = new TrackedInvoice { Year = 2026, TaxNumber = "12345678", InvoiceNumber = "EREDETI", Related = "SZ-3" };
+        var kept = InvoiceLinks.Decide(
+            [stored],
+            [new SliceLinkItem { Operation = "STORNO", TaxNumber = "12345678", InvoiceNumber = "SZ-3", OriginalInvoiceNumber = "EREDETI" }]);
+        Assert.Empty(kept.Updates);
+        Assert.Equal("SZ-3", stored.Related);
+
+        var registry = Registry(withInvoice: true, related: "SZ-1");
+        var saved = Enumerable.Repeat("", 16).ToArray();
+        saved[1] = "12345678";
+        saved[3] = "SZ-3";
+        saved[4] = "SZ-BENT";
+        saved[15] = "megjegyzés";
+        registry.Files[2026] = WorkbookFile.Apply(
+            registry.Files[2026],
+            new RegistryEdit
+            {
+                Year = 2026,
+                CurrentYear = 2026,
+                SheetMonth = 1,
+                NewRows = [new RegistryRowWrite { Month = 1, Cells = saved }]
+            });
+        var digest = new FakeDigest();
+        var invoices = new FakeInvoices();
+        digest.Pages.Add(_ => [Item("STORNO", "SZ-3", new DateOnly(2026, 1, 12), original: "SZ-BENT")]);
+        await Run(registry, digest, invoices, new DateTimeOffset(2026, 1, 20, 12, 0, 0, TimeSpan.Zero));
+        Assert.Equal(0, invoices.Calls);
+        Assert.Equal("SZ-1;STORNO:SZ-3", Related(registry.Files[2026], "SZ-BENT"));
+        Assert.Equal("megjegyzés", Note(registry.Files[2026], "SZ-BENT"));
+        Assert.DoesNotContain(registry.Errors.All, note => note.Type == NotificationNote.DocumentType);
+    }
+
+    [Fact]
+    public async Task Document_note_is_written_for_a_new_modifier_before_upload()
+    {
+        var registry = Registry();
+        var digest = new FakeDigest();
+        var invoices = new FakeInvoices();
+        digest.Pages.Add(_ =>
+        [
+            Item("CREATE", "EREDETI", new DateOnly(2026, 1, 10)),
+            Item("MODIFY", "SZ-2", new DateOnly(2026, 1, 11), original: "EREDETI", batch: 4)
+        ]);
+        await Run(registry, digest, invoices, new DateTimeOffset(2026, 1, 20, 12, 0, 0, TimeSpan.Zero));
+        var note = Assert.Single(registry.Errors.All, item => item.Type == NotificationNote.DocumentType);
+        Assert.Equal("EREDETI módosítása érkezett, számlaszám: SZ-2", note.Message);
+        Assert.Equal("SZ-2", note.Invoice);
+        Assert.Equal("12345678", note.Taxnumber);
+        Assert.Equal("Partner", note.Partnername);
+        Assert.Equal("12345678|SZ-2", note.Identity);
+        Assert.False(NotificationRecords.TableFields(note).ContainsKey("NotificationTimestamp"));
+
+        var createOnly = Registry();
+        var createDigest = new FakeDigest();
+        createDigest.Pages.Add(_ => [Item("CREATE", "SZ-1", new DateOnly(2026, 1, 10))]);
+        await Run(createOnly, createDigest, new FakeInvoices(), new DateTimeOffset(2026, 1, 20, 12, 0, 0, TimeSpan.Zero));
+        Assert.DoesNotContain(createOnly.Errors.All, item => item.Type == NotificationNote.DocumentType);
+
+        var failing = Registry();
+        var failingDigest = new FakeDigest();
+        failingDigest.Pages.Add(_ => [Item("MODIFY", "SZ-2", new DateOnly(2026, 1, 11), original: "EREDETI")]);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => InvoiceProcessing.Run(
+            new ProcessingRun
+            {
+                StartDate = "2026-01-01",
+                Now = new DateTimeOffset(2026, 1, 20, 12, 0, 0, TimeSpan.Zero),
+                Digest = failingDigest,
+                Invoices = new FakeInvoices(),
+                Registry = failing
+            },
+            new ThrowingLog()));
+        Assert.Empty(failing.UploadOrder);
+        Assert.DoesNotContain(failing.Trace, call => call == "upload");
     }
 
     [Fact]
@@ -266,13 +351,17 @@ public class InvoiceProcessingTests
         missingDigest.Pages.Add(_ => [Item("STORNO", "SZ-3", new DateOnly(2026, 1, 12), original: "NINCS")]);
         await Run(missingRegistry, missingDigest, missingInvoices, new DateTimeOffset(2026, 1, 20, 12, 0, 0, TimeSpan.Zero));
         Assert.Equal("NINCS", Original(missingRegistry.Files[2026], "SZ-3"));
-        var record = Assert.Single(missingRegistry.Errors.All);
+        var record = Assert.Single(missingRegistry.Errors.All, note => note.Type == NotificationNote.ErrorType);
         Assert.Contains("Az eredeti nincs a nyilvántartásban.", record.Message, StringComparison.Ordinal);
         Assert.Contains("NINCS", record.Message, StringComparison.Ordinal);
+        var storno = Assert.Single(missingRegistry.Errors.All, note => note.Type == NotificationNote.DocumentType);
+        Assert.Equal("NINCS sztornózás érkezett, számlaszám: SZ-3", storno.Message);
+        Assert.Equal("SZ-3", storno.Invoice);
         missingDigest.Pages.Clear();
         missingDigest.Pages.Add(_ => [Item("STORNO", "SZ-3", new DateOnly(2026, 1, 12), original: "NINCS")]);
         await Run(missingRegistry, missingDigest, missingInvoices, new DateTimeOffset(2026, 1, 21, 12, 0, 0, TimeSpan.Zero));
-        Assert.Single(missingRegistry.Errors.All);
+        Assert.Single(missingRegistry.Errors.All, note => note.Type == NotificationNote.ErrorType);
+        Assert.Single(missingRegistry.Errors.All, note => note.Type == NotificationNote.DocumentType);
     }
 
     [Fact]
@@ -560,6 +649,22 @@ public class InvoiceProcessingTests
             }
 
             return Task.CompletedTask;
+        }
+    }
+
+    private sealed class ThrowingLog : INotificationLog
+    {
+        public void Add(NotificationNote note)
+        {
+            if (note.Type == NotificationNote.DocumentType)
+            {
+                throw new InvalidOperationException("tábla");
+            }
+        }
+
+        public bool HasPaymentOn(DateOnly day)
+        {
+            return false;
         }
     }
 }

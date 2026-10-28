@@ -216,6 +216,16 @@ internal static class InvoiceProcessing
             }
 
             bucket.Add(new RegistryRowWrite { Month = item.InvoiceIssueDate.Month, Cells = Cells(draft) });
+            if (item.InvoiceOperation is "MODIFY" or "STORNO")
+            {
+                notifications.Add(NotificationRecords.DocumentNote(
+                    draft.TaxNumber,
+                    draft.Partner,
+                    draft.InvoiceNumber,
+                    item.OriginalInvoiceNumber,
+                    item.InvoiceOperation));
+            }
+
             AddLink(linkItems, item);
         }
 

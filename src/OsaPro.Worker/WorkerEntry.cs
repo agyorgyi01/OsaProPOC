@@ -30,7 +30,14 @@ public static class WorkerEntry
         }
         else if (plan.FunctionId == FunctionIds.NotificationComposition)
         {
-            FunctionHandlers.RunNotificationComposition(logger);
+            if (invoiceWork is null)
+            {
+                FunctionHandlers.RunNotificationComposition(logger);
+            }
+            else
+            {
+                FunctionHandlers.RunNotificationComposition(logger, invoiceWork);
+            }
         }
 
         return Success;

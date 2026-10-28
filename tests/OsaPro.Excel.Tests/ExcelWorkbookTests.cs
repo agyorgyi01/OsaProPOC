@@ -408,6 +408,48 @@ public class ExcelWorkbookTests
         }
     }
 
+    [Fact]
+    public async Task Notice_read_downloads_existing_files_and_keeps_the_current_notice_days()
+    {
+        var previous = WorkbookFile.Create(2025, 6, "2025-12-31T00:00:00Z", "3");
+        var current = WorkbookFile.Create(2026, 6, "2026-01-01T00:00:00Z", "");
+        var older = WorkbookFile.Create(2024, 6, "2024-01-01T00:00:00Z", "9");
+        var handler = new GraphDouble();
+        handler.Add("SZÁMLÁK2024.xlsx", older);
+        handler.Add("SZÁMLÁK2025.xlsx", previous);
+        handler.Add("SZÁMLÁK2026.xlsx", current);
+        using var workbook = Create(handler, [], Options());
+
+        var read = await workbook.ReadForNotices();
+
+        Assert.Equal("7,5,1", read.NoticeDays);
+        Assert.DoesNotContain(2026, read.MissingYears);
+        Assert.Empty(read.FailedYears);
+        Assert.Contains(2026, read.Files.Keys);
+        Assert.Contains(2025, read.Files.Keys);
+        Assert.DoesNotContain(2024, read.Files.Keys);
+        Assert.DoesNotContain(handler.Calls, call => call.Method == "PUT");
+        Assert.DoesNotContain(handler.Calls, call => call.Url.Contains(handler.IdOf("SZÁMLÁK2024.xlsx"), StringComparison.Ordinal) && call.Url.Contains("/content", StringComparison.Ordinal));
+
+        var failing = new GraphDouble { FailDownloadsContaining = "SZÁMLÁK2026.xlsx" };
+        failing.Add("SZÁMLÁK2025.xlsx", previous);
+        failing.Add("SZÁMLÁK2026.xlsx", current);
+        using var failedWorkbook = Create(failing, [], Options());
+        var failed = await failedWorkbook.ReadForNotices();
+        Assert.Contains(2026, failed.FailedYears);
+        Assert.Contains(2025, failed.Files.Keys);
+        Assert.Contains(failing.Calls, call => call.Method == "GET" && call.Url.Contains("/items/" + failing.IdOf("SZÁMLÁK2026.xlsx") + "/content", StringComparison.Ordinal));
+        Assert.Contains(failing.Calls, call => call.Method == "GET" && call.Url.Contains("/items/" + failing.IdOf("SZÁMLÁK2025.xlsx") + "/content", StringComparison.Ordinal));
+        Assert.DoesNotContain(failing.Calls, call => call.Method == "PUT");
+
+        var missing = new GraphDouble();
+        missing.Add("SZÁMLÁK2025.xlsx", previous);
+        using var missingWorkbook = Create(missing, [], Options());
+        var absent = await missingWorkbook.ReadForNotices();
+        Assert.Contains(2026, absent.MissingYears);
+        Assert.DoesNotContain(missing.Calls, call => call.Method == "PUT");
+    }
+
     private static ExcelWorkbook Create(GraphDouble handler, List<TimeSpan> delays, ExcelOptions options)
     {
         return new ExcelWorkbook(

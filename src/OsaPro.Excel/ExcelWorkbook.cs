@@ -146,6 +146,70 @@ public sealed class ExcelWorkbook : IDisposable
         return files;
     }
 
+    internal async Task<NoticeRead> ReadForNotices(CancellationToken cancellationToken = default)
+    {
+        WorkbookRules.RequireAddress(_options);
+        var current = WorkbookRules.CurrentYear(_clock());
+        _year = current;
+        _month = WorkbookRules.CurrentMonth(_clock());
+        _file = "";
+        try
+        {
+            return await ReadNotices(current, cancellationToken).ConfigureAwait(false);
+        }
+        catch (ExcelWorkbookException)
+        {
+            throw;
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            throw Failed("A művelet sikertelen.", exception);
+        }
+    }
+
+    private async Task<NoticeRead> ReadNotices(int current, CancellationToken cancellationToken)
+    {
+        await Token(cancellationToken).ConfigureAwait(false);
+        var siteId = await SiteId(cancellationToken).ConfigureAwait(false);
+        var folderId = await FolderId(siteId, cancellationToken).ConfigureAwait(false);
+        var children = await Children(siteId, folderId, cancellationToken).ConfigureAwait(false);
+        var files = new Dictionary<int, byte[]>();
+        var missing = new List<int>();
+        var failed = new List<int>();
+        foreach (var year in new[] { current, current - 1 })
+        {
+            var child = Match(children, WorkbookRules.FileName(year));
+            if (child is null)
+            {
+                missing.Add(year);
+                continue;
+            }
+
+            _year = year;
+            _file = child.Name;
+            try
+            {
+                files[year] = await Download(siteId, child.Id, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                failed.Add(year);
+            }
+        }
+
+        var noticeDays = files.TryGetValue(current, out var currentBytes)
+            ? WorkbookFile.ReadNoticeDays(currentBytes)
+            : WorkbookRules.DefaultNoticeDays;
+        return new NoticeRead
+        {
+            CurrentYear = current,
+            MissingYears = missing,
+            FailedYears = failed,
+            Files = files,
+            NoticeDays = noticeDays
+        };
+    }
+
     private async Task EnsureCore(CancellationToken cancellationToken)
     {
         await Token(cancellationToken).ConfigureAwait(false);

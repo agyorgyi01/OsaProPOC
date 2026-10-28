@@ -77,6 +77,11 @@ internal static class WorkbookRules
         return Budapest(clock).Month;
     }
 
+    public static DateOnly CurrentDate(DateTimeOffset clock)
+    {
+        return DateOnly.FromDateTime(Budapest(clock).DateTime);
+    }
+
     private static DateTimeOffset Budapest(DateTimeOffset clock)
     {
         var zone = TimeZoneInfo.FindSystemTimeZoneById("Europe/Budapest");

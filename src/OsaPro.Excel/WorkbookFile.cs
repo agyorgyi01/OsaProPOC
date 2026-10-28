@@ -338,6 +338,30 @@ internal static class WorkbookFile
         return text;
     }
 
+    internal static string ReadNoticeDays(byte[] source)
+    {
+        var rows = ReadParameterRows(source);
+        if (rows is null)
+        {
+            return WorkbookRules.DefaultNoticeDays;
+        }
+
+        foreach (var (key, value) in rows)
+        {
+            if (WorkbookRules.SameName(key, WorkbookRules.NoticeDaysKey))
+            {
+                return WorkbookRules.CopyValue(value) ?? WorkbookRules.DefaultNoticeDays;
+            }
+        }
+
+        return WorkbookRules.DefaultNoticeDays;
+    }
+
+    internal static IReadOnlyList<StoredInvoiceRow> ReadNoticeRows(byte[] source, int year)
+    {
+        return ReadInvoices(source, year);
+    }
+
     internal static RegistrySnapshot ReadSnapshot(IReadOnlyDictionary<int, byte[]> files, DateTimeOffset clock)
     {
         var current = WorkbookRules.CurrentYear(clock);

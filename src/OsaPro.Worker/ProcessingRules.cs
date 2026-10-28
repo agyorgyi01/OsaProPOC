@@ -283,7 +283,7 @@ internal static class InvoiceLinks
                 continue;
             }
 
-            var related = Append(original.Related, item.InvoiceNumber.Trim());
+            var related = Append(original.Related, item.InvoiceNumber, item.Operation);
             if (!string.Equals(related, original.Related, StringComparison.Ordinal))
             {
                 original.Related = related;
@@ -294,14 +294,25 @@ internal static class InvoiceLinks
         return (updates, missing);
     }
 
-    public static string Append(string? existing, string invoiceNumber)
+    public static string Append(string? existing, string invoiceNumber, string operation = "MODIFY")
     {
+        var number = (invoiceNumber ?? "").Trim();
+        var token = operation == "STORNO" ? "STORNO:" + number : number;
         var current = existing ?? "";
-        if (current.Split(';').Contains(invoiceNumber, StringComparer.Ordinal))
+        foreach (var part in current.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            return current;
+            if (SameNumber(part, number))
+            {
+                return current;
+            }
         }
 
-        return current.Length == 0 ? invoiceNumber : current + ";" + invoiceNumber;
+        return current.Length == 0 ? token : current + ";" + token;
+    }
+
+    private static bool SameNumber(string token, string number)
+    {
+        var value = token.StartsWith("STORNO:", StringComparison.Ordinal) ? token["STORNO:".Length..] : token;
+        return string.Equals(value, number, StringComparison.Ordinal);
     }
 }

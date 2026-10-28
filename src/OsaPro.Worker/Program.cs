@@ -41,6 +41,12 @@ if (plan.FunctionId is not null)
         var notifications = TableNotificationLog.Open(configuration["Processing:NotificationTableUri"]);
         invoiceWork = () => InvoiceProcessing.RunConfigured(configuration, notifications).GetAwaiter().GetResult();
     }
+    else if (plan.FunctionId == FunctionIds.NotificationComposition)
+    {
+        var configuration = host.Services.GetRequiredService<IConfiguration>();
+        var notifications = TableNotificationLog.Open(configuration["Processing:NotificationTableUri"]);
+        invoiceWork = () => NotificationComposition.RunConfigured(configuration, notifications).GetAwaiter().GetResult();
+    }
     return WorkerEntry.Execute(args, startup.IsDevelopment, logger, invoiceWork);
 }
 
