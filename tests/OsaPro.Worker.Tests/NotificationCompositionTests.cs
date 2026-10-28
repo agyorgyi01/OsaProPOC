@@ -51,7 +51,8 @@ public class NotificationCompositionTests
                 Invoice("Másik", "111", "SZ-1", serial.ToString(), "9", "Átutalás"),
                 Invoice("Partner", "Ab-1", "SZ-2", "2026-10-30", "-1500", "Átutalás"),
                 Invoice("Partner", "ab-1", "SZ-2", "2026-10-30", "", "Átutalás"),
-                Invoice("Partner", "222", "SZ-3", "2026-10-30", "nem-szam", "Átutalás", paid: "FIZETVE "),
+                Invoice("Partner", "222", "SZ-3", "2026-10-30", "nem-szam", "Átutalás", paid: "igen"),
+                Invoice("Partner", "666", "SZ-7", "2026-10-30", "10", "Átutalás", paid: " fizetve "),
                 Invoice("Partner", "333", "SZ-4", "nem-datum", "10", "Átutalás", issue: ""),
                 Invoice("Partner", "444", "SZ-5", "2026-10-30", "10", "Készpénz"),
                 Invoice("Partner", "555", "SZ-6", "2026-10-30", "10", "átutalás")
@@ -68,7 +69,8 @@ public class NotificationCompositionTests
         var empty = Assert.Single(notes, note => note.Taxnumber == "ab-1");
         Assert.Equal("SZ-2 fizetés esedékes 2026.10.30, összeg: ", empty.Message);
         Assert.Contains(notes, note => note.Invoice == "SZ-3" && note.Message == "SZ-3 fizetés esedékes 2026.10.30, összeg: ");
-        Assert.Contains(notes, note => note.Identity == "paid|222|SZ-3" && note.Message.Contains("FIZETVE ", StringComparison.Ordinal));
+        Assert.Contains(notes, note => note.Identity == "paid|222|SZ-3" && note.Message.Contains("igen", StringComparison.Ordinal));
+        Assert.DoesNotContain(notes, note => note.Invoice == "SZ-7");
         Assert.DoesNotContain(notes, note => note.Invoice == "SZ-4" && note.Type == "Payment");
         Assert.DoesNotContain(notes, note => note.Invoice is "SZ-5" or "SZ-6");
         Assert.DoesNotContain(notes, note => note.Message.Contains("bármi", StringComparison.Ordinal));

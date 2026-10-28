@@ -33,7 +33,7 @@ A jelölések jelentése: `project.md`. A hatókör és a kizárások ott vannak
 11. `Áfa összege`: a bizonylaton szereplő áfa pénzösszege.
 12. `Fizetési mód`: például `ÁTUTALÁS`, `KÉSZPÉNZ`, `BANKKÁRTYA`, `UTÁNVÉT`. Az `ELŐLEGEZVE` előzetes fizetésre utaló jelölés.
 13. `Számla megvan?`: felhasználói jelölés. Üres: a rendelkezésre állás még nincs igazolva. `IGEN`: a bizonylat rendelkezésre áll.
-14. `Fizetve?`: felhasználói jelölés. Pontosan `FIZETVE` esetén kiegyenlített; üresen kiegyenlítetlen. Más érték hibás.
+14. `Fizetve?`: felhasználói jelölés. A szélső whitespace nélkül, nagybetűvel `FIZETVE` esetén kiegyenlített; üresen kiegyenlítetlen. Más érték hibás.
 15. `Autó rendelés`: felhasználó által kezelt belső hivatkozás, például rendszám, személynév vagy rendelési megjelölés.
 16. `Megjegyzés`: felhasználó által kezelt szabad szöveges kiegészítés.
 
@@ -94,7 +94,7 @@ Az `ANNUL` művelet a hatókörön kívül van: `project.md`.
 
 **DECISION** – A `Fizetve?` mezőt kizárólag a felhasználó módosíthatja.
 
-**DECISION** – A számla csak akkor kiegyenlített, ha a mező értéke pontosan `FIZETVE`.
+**DECISION** – A számla csak akkor kiegyenlített, ha a mező szélső whitespace nélkül, nagybetűvel `FIZETVE`.
 
 **DECISION** – Az üres mező kiegyenlítetlen számlát jelent. Más érték hibás, és a számlát továbbra is kiegyenlítetlenként kezeljük; a hibát az értesítőben jelezzük.
 

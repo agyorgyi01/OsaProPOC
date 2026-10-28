@@ -68,11 +68,11 @@ Alternatíva: új Excel-oszlop a műveletnek. Elvetve, mert a proposal nem vesz 
 
 ### 5. A dátum és az összeg a cellából készül
 
-A `Fizetési mód` összehasonlítás előtt a szélső whitespace lekerül. A `Fizetve?` nem: csak a pontos `FIZETVE` kiegyenlített, az üres cella kiegyenlítetlen. A határidő a `Fiz. határidő` dátuma, különben a `Számla kelte`. A program által írt dátumcella nyers Excel-sorszám, a `1899-12-30` epochával. A `yyyy-MM-dd` szöveg is dátum. Más szöveg nem dátum: nincs fizetési sor és nincs külön hiba sor. A szöveg dátuma a tényleges határidő `yyyy.MM.dd` alakban, akkor is, ha a jelzés hétfőre csúszott. Az összegcella nyers, invariáns tizedespontos szám. A kiírt összeg két tizedes, tizedesvessző, ezres tagolás nélkül. A nem számként olvasható összeg ugyanaz, mint a hiányzó: a sor megmarad, az összeg helye üres. A mínusz előjel megmarad. Ugyanazon adószám és számlaszám első sora adja a szöveget, a későbbi másolat nem készít második fizetési sort.
+A `Fizetési mód` összehasonlítás előtt a szélső whitespace lekerül. A `Fizetve?` a szélső whitespace nélkül, nagybetűvel `FIZETVE` esetén kiegyenlített. Az üres cella kiegyenlítetlen. A határidő a `Fiz. határidő` dátuma, különben a `Számla kelte`. A program által írt dátumcella nyers Excel-sorszám, a `1899-12-30` epochával. A `yyyy-MM-dd` szöveg is dátum. Más szöveg nem dátum: nincs fizetési sor és nincs külön hiba sor. A szöveg dátuma a tényleges határidő `yyyy.MM.dd` alakban, akkor is, ha a jelzés hétfőre csúszott. Az összegcella nyers, invariáns tizedespontos szám. A kiírt összeg két tizedes, tizedesvessző, ezres tagolás nélkül. A nem számként olvasható összeg ugyanaz, mint a hiányzó: a sor megmarad, az összeg helye üres. A mínusz előjel megmarad. Ugyanazon adószám és számlaszám első sora adja a szöveget, a későbbi másolat nem készít második fizetési sort.
 
 A magyar nap a `Europe/Budapest` zóna. Az indulás éve a `Processing:StartDate` évszáma, nem a mai nap éve.
 
-Alternatíva: a `Fizetve?` is trimelés után egyezik. Elvetve, mert a spec a pontos értéket kéri.
+Alternatíva: a `Fizetve?` csak a pontos `FIZETVE` szövegre egyezik. Elvetve, mert a mező a szélső whitespace nélkül, nagybetűvel egyezik.
 
 ## Risks / Trade-offs
 

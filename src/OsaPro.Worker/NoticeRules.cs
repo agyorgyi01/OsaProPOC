@@ -57,10 +57,11 @@ internal static class NoticeRules
                 continue;
             }
 
-            var paid = invoice.Paid ?? "";
+            var paidRaw = invoice.Paid ?? "";
+            var paid = paidRaw.Trim().ToUpperInvariant();
             if (paid.Length > 0 && !string.Equals(paid, "FIZETVE", StringComparison.Ordinal))
             {
-                notes.Add(NotificationRecords.PaidNote(tax, Trim(invoice.Partner), number, paid));
+                notes.Add(NotificationRecords.PaidNote(tax, Trim(invoice.Partner), number, paidRaw));
             }
 
             if (weekend

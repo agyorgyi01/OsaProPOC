@@ -143,10 +143,10 @@ A fizetési sor a határidő előtti előértesítési naptári napon, a határi
 - **THEN** hétfőn egy fizetési sor készül
 
 ### Requirement: Kiegyenlítettség
-A számla csak akkor kiegyenlített, ha a `Fizetve?` értéke pontosan `FIZETVE`. Üres cella kiegyenlítetlen. Kiegyenlített számla MUST NOT fizetési sort kapni.
+A számla akkor kiegyenlített, ha a `Fizetve?` szélső whitespace nélkül, nagybetűvel `FIZETVE`. Üres vagy csak whitespace cella kiegyenlítetlen. Kiegyenlített számla MUST NOT fizetési sort kapni.
 
 #### Scenario: Fizetve
-- **WHEN** a `Fizetve?` értéke `FIZETVE`, és a határidő ma esedékes
+- **WHEN** a `Fizetve?` értéke ` fizetve `, és a határidő ma esedékes
 - **THEN** fizetési sor nem készül
 
 #### Scenario: Üres cella
@@ -154,7 +154,7 @@ A számla csak akkor kiegyenlített, ha a `Fizetve?` értéke pontosan `FIZETVE`
 - **THEN** fizetési sor készül
 
 ### Requirement: Hibás Fizetve
-Ha a `Fizetve?` nem üres és nem pontosan `FIZETVE`, a számla kiegyenlítetlen, és egyszeri `Error` sor MUST készülni. A `Message` MUST `{számlaszám} Fizetve? értéke hibás: {érték}. Kiegyenlítetlenként kezeljük.` lenni. Átutalásnál a fizetési sor is elkészül. Más módnál csak a hiba sor készül. Sztornóláncnál fizetési sor nincs, a hiba sor van. Ugyanarra a számlára második hiba sor MUST NOT készülni.
+Ha a `Fizetve?` a szélső whitespace és a nagybetűsítés után nem üres és nem `FIZETVE`, a számla kiegyenlítetlen, és egyszeri `Error` sor MUST készülni. A `Message` MUST `{számlaszám} Fizetve? értéke hibás: {érték}. Kiegyenlítetlenként kezeljük.` lenni. Átutalásnál a fizetési sor is elkészül. Más módnál csak a hiba sor készül. Sztornóláncnál fizetési sor nincs, a hiba sor van. Ugyanarra a számlára második hiba sor MUST NOT készülni.
 
 #### Scenario: Hibás érték átutalásnál
 - **WHEN** a `Fizetve?` értéke `igen`, a mód `Átutalás`, és a számla esedékes
